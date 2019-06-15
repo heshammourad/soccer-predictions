@@ -2,15 +2,14 @@
   "name": "soccerpredictions",
   "version": "1.0.0",
   "description": "ELO based soccer predictions",
-  "main": "soccer_predictions.js",
+  "main": "src/soccer_predictions.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Hesham Mourad",
   "license": "ISC",
+  "dependencies": {},
   "devDependencies": {
-    "eslint": "^5.16.0",
-    "eslint-config-airbnb-base": "^13.1.0",
-    "eslint-plugin-import": "^2.17.3"
+    "axios": "^0.19.0"
   }
 }
