@@ -3,226 +3,61 @@ const { getProbabilities } = require("./constants");
 
 const currentRatings = {
   // UEFA Euro 2020 Qualification
-  AD: {
-    name: "Andorra",
-    rating: 1063
-  },
-  AL: {
-    name: "Albania",
-    rating: 1494
-  },
-  AM: {
-    name: "Armenia",
-    rating: 1428
-  },
-  AT: {
-    name: "Austria",
-    rating: 1710
-  },
-  AZ: {
-    name: "Azerbaijan",
-    rating: 1378
-  },
-  BA: {
-    name: "Bosnia and Herzegovina",
-    rating: 1751
-  },
-  BE: {
-    name: "Belgium",
-    rating: 2045
-  },
-  BG: {
-    name: "Bulgaria",
-    rating: 1610
-  },
-  BY: {
-    name: "Belarus",
-    rating: 1517
-  },
-  CH: {
-    name: "Switzerland",
-    rating: 1898
-  },
-  CY: {
-    name: "Cyprus",
-    rating: 1408
-  },
-  CZ: {
-    name: "Czechia",
-    rating: 1725
-  },
-  DE: {
-    name: "Germany",
-    rating: 1968
-  },
-  DK: {
-    name: "Denmark",
-    rating: 1885
-  },
-  EE: {
-    name: "Estonia",
-    rating: 1463
-  },
-  EI: {
-    name: "Northern Ireland",
-    rating: 1661
-  },
-  EN: {
-    name: "England",
-    rating: 1943
-  },
-  ES: {
-    name: "Spain",
-    rating: 2017
-  },
-  FI: {
-    name: "Finland",
-    rating: 1674
-  },
-  FO: {
-    name: "Faroe Islands",
-    rating: 1233
-  },
-  FR: {
-    name: "France",
-    rating: 2050
-  },
-  GE: {
-    name: "Georgia",
-    rating: 1533
-  },
-  GI: {
-    name: "Gibraltar",
-    rating: 1095
-  },
-  GR: {
-    name: "Greece",
-    rating: 1608
-  },
-  HR: {
-    name: "Croatia",
-    rating: 1903
-  },
-  HU: {
-    name: "Hungary",
-    rating: 1649
-  },
-  IE: {
-    name: "Ireland",
-    rating: 1728
-  },
-  IL: {
-    name: "Israel",
-    rating: 1609
-  },
-  IS: {
-    name: "Iceland",
-    rating: 1673
-  },
-  IT: {
-    name: "Italy",
-    rating: 1915
-  },
-  KO: {
-    name: "Kosovo",
-    rating: 1514
-  },
-  KZ: {
-    name: "Kazakhstan",
-    rating: 1383
-  },
-  LI: {
-    name: "Liechtenstein",
-    rating: 1124
-  },
-  LT: {
-    name: "Lithuania",
-    rating: 1324
-  },
-  LU: {
-    name: "Luxembourg",
-    rating: 1357
-  },
-  LV: {
-    name: "Latvia",
-    rating: 1271
-  },
-  MD: {
-    name: "Moldova",
-    rating: 1315
-  },
-  ME: {
-    name: "Montenegro",
-    rating: 1574
-  },
-  MT: {
-    name: "Malta",
-    rating: 1196
-  },
-  NL: {
-    name: "Netherlands",
-    rating: 2000
-  },
-  NM: {
-    name: "North Macedonia",
-    rating: 1523
-  },
-  NO: {
-    name: "Norway",
-    rating: 1677
-  },
-  PL: {
-    name: "Poland",
-    rating: 1792
-  },
-  PT: {
-    name: "Portugal",
-    rating: 1960
-  },
-  RO: {
-    name: "Romania",
-    rating: 1746
-  },
-  RS: {
-    name: "Serbia",
-    rating: 1793
-  },
-  RU: {
-    name: "Russia",
-    rating: 1761
-  },
-  SE: {
-    name: "Sweden",
-    rating: 1839
-  },
-  SI: {
-    name: "Slovenia",
-    rating: 1551
-  },
-  SK: {
-    name: "Slovakia",
-    rating: 1750
-  },
-  SM: {
-    name: "San Marino",
-    rating: 832
-  },
-  SQ: {
-    name: "Scotland",
-    rating: 1669
-  },
-  TR: {
-    name: "Turkey",
-    rating: 1780
-  },
-  UA: {
-    name: "Ukraine",
-    rating: 1823
-  },
-  WA: {
-    name: "Wales",
-    rating: 1767
-  },
+  AD: { name: 'Andorra', rating: 1063 },
+  AL: { name: 'Albania', rating: 1504 },
+  AM: { name: 'Armenia', rating: 1461 },
+  AT: { name: 'Austria', rating: 1736 },
+  AZ: { name: 'Azerbaijan', rating: 1365 },
+  BA: { name: 'Bosnia and Herzegovina', rating: 1744 },
+  BE: { name: 'Belgium', rating: 2049 },
+  BG: { name: 'Bulgaria', rating: 1580 },
+  BY: { name: 'Belarus', rating: 1500 },
+  CH: { name: 'Switzerland', rating: 1901 },
+  CY: { name: 'Cyprus', rating: 1405 },
+  CZ: { name: 'Czechia', rating: 1738 },
+  DE: { name: 'Germany', rating: 1971 },
+  DK: { name: 'Denmark', rating: 1890 },
+  EE: { name: 'Estonia', rating: 1460 },
+  EI: { name: 'Northern Ireland', rating: 1678 },
+  EN: { name: 'England', rating: 1940 },
+  ES: { name: 'Spain', rating: 2029 },
+  FI: { name: 'Finland', rating: 1678 },
+  FO: { name: 'Faroe Islands', rating: 1226 },
+  FR: { name: 'France', rating: 2050 },
+  GE: { name: 'Georgia', rating: 1528 },
+  GI: { name: 'Gibraltar', rating: 1094 },
+  GR: { name: 'Greece', rating: 1575 },
+  HR: { name: 'Croatia', rating: 1885 },
+  HU: { name: 'Hungary', rating: 1670 },
+  IE: { name: 'Ireland', rating: 1729 },
+  IL: { name: 'Israel', rating: 1597 },
+  IS: { name: 'Iceland', rating: 1693 },
+  IT: { name: 'Italy', rating: 1922 },
+  KO: { name: 'Kosovo', rating: 1544 },
+  KZ: { name: 'Kazakhstan', rating: 1385 },
+  LI: { name: 'Liechtenstein', rating: 1120 },
+  LT: { name: 'Lithuania', rating: 1321 },
+  LU: { name: 'Luxembourg', rating: 1356 },
+  LV: { name: 'Latvia', rating: 1250 },
+  MD: { name: 'Moldova', rating: 1305 },
+  ME: { name: 'Montenegro', rating: 1561 },
+  MT: { name: 'Malta', rating: 1191 },
+  NL: { name: 'Netherlands', rating: 1979 },
+  NM: { name: 'North Macedonia', rating: 1497 },
+  NO: { name: 'Norway', rating: 1684 },
+  PL: { name: 'Poland', rating: 1804 },
+  PT: { name: 'Portugal', rating: 1981 },
+  RO: { name: 'Romania', rating: 1751 },
+  RS: { name: 'Serbia', rating: 1796 },
+  RU: { name: 'Russia', rating: 1764 },
+  SE: { name: 'Sweden', rating: 1827 },
+  SI: { name: 'Slovenia', rating: 1572 },
+  SK: { name: 'Slovakia', rating: 1763 },
+  SM: { name: 'San Marino', rating: 830 },
+  SQ: { name: 'Scotland', rating: 1665 },
+  TR: { name: 'Turkey', rating: 1760 },
+  UA: { name: 'Ukraine', rating: 1824 },
+  WA: { name: 'Wales', rating: 1746 },
   // Copa America
   BR: {
     name: "Brazil",
@@ -501,12 +336,12 @@ const currentStandings = {
     A: [{
       team: "BG",
       points: 2,
-      goalDifference: -1
+      goalDifference: -2
     },
     {
       team: "CZ",
-      points: 3,
-      goalDifference: -4
+      points: 6,
+      goalDifference: -1
     },
     {
       team: "EN",
@@ -515,24 +350,24 @@ const currentStandings = {
     },
     {
       team: "KO",
-      points: 2,
-      goalDifference: 0
+      points: 5,
+      goalDifference: 1
     },
     {
       team: "ME",
       points: 2,
-      goalDifference: -4
+      goalDifference: -7
     }
     ],
     B: [{
       team: "LT",
       points: 1,
-      goalDifference: -1
+      goalDifference: -4
     },
     {
       team: "LU",
       points: 4,
-      goalDifference: 0
+      goalDifference: -1
     },
     {
       team: "PT",
@@ -541,34 +376,34 @@ const currentStandings = {
     },
     {
       team: "RS",
-      points: 1,
-      goalDifference: -5
+      points: 4,
+      goalDifference: -2
     },
     {
       team: "UA",
-      points: 7,
-      goalDifference: 6
+      points: 10,
+      goalDifference: 7
     }
     ],
     C: [{
       team: "BY",
       points: 0,
-      goalDifference: -7
+      goalDifference: -8
     },
     {
       team: "DE",
-      points: 6,
-      goalDifference: 3
+      points: 9,
+      goalDifference: 11
     },
     {
       team: "EE",
       points: 0,
-      goalDifference: -3
+      goalDifference: -11
     },
     {
       team: "EI",
-      points: 9,
-      goalDifference: 4
+      points: 12,
+      goalDifference: 5
     },
     {
       team: "NL",
@@ -583,29 +418,29 @@ const currentStandings = {
     },
     {
       team: "DK",
-      points: 2,
-      goalDifference: 0
+      points: 5,
+      goalDifference: 4
     },
     {
       team: "GE",
       points: 3,
-      goalDifference: 0
+      goalDifference: -4
     },
     {
       team: "GI",
       points: 0,
-      goalDifference: -4
+      goalDifference: -6
     },
     {
       team: "IE",
-      points: 7,
-      goalDifference: 2
+      points: 10,
+      goalDifference: 4
     }
     ],
     E: [{
       team: "AZ",
       points: 0,
-      goalDifference: -3
+      goalDifference: -7
     },
     {
       team: "HR",
@@ -614,173 +449,173 @@ const currentStandings = {
     },
     {
       team: "HU",
-      points: 6,
-      goalDifference: 1
+      points: 9,
+      goalDifference: 2
     },
     {
       team: "SK",
-      points: 3,
-      goalDifference: 1
+      points: 6,
+      goalDifference: 5
     },
     {
       team: "WA",
       points: 3,
-      goalDifference: 0
+      goalDifference: -1
     }
     ],
     F: [{
       team: "ES",
-      points: 9,
-      goalDifference: 6
+      points: 12,
+      goalDifference: 9
     },
     {
       team: "FO",
       points: 0,
-      goalDifference: -7
+      goalDifference: -9
     },
     {
       team: "MT",
       points: 3,
-      goalDifference: -4
+      goalDifference: -8
     },
     {
       team: "NO",
-      points: 2,
-      goalDifference: -1
+      points: 5,
+      goalDifference: 1
     },
     {
       team: "RO",
-      points: 4,
-      goalDifference: 2
+      points: 7,
+      goalDifference: 6
     },
     {
       team: "SE",
       points: 7,
-      goalDifference: 4
+      goalDifference: 1
     }
     ],
     G: [{
       team: "AT",
-      points: 3,
-      goalDifference: -2
+      points: 6,
+      goalDifference: 1
     },
     {
       team: "IL",
       points: 7,
-      goalDifference: 5
+      goalDifference: 1
     },
     {
       team: "LV",
       points: 0,
-      goalDifference: -7
+      goalDifference: -12
     },
     {
       team: "NM",
       points: 4,
-      goalDifference: 1
+      goalDifference: -2
     },
     {
       team: "PL",
-      points: 9,
-      goalDifference: 4
+      points: 12,
+      goalDifference: 8
     },
     {
       team: "SI",
-      points: 2,
-      goalDifference: -1
+      points: 5,
+      goalDifference: 4
     }
     ],
     H: [{
       team: "AD",
       points: 0,
-      goalDifference: -6
+      goalDifference: -10
     },
     {
       team: "AL",
-      points: 3,
-      goalDifference: 0
+      points: 6,
+      goalDifference: 2
     },
     {
       team: "FR",
-      points: 6,
-      goalDifference: 5
+      points: 9,
+      goalDifference: 9
     },
     {
       team: "IS",
-      points: 6,
-      goalDifference: -1
+      points: 9,
+      goalDifference: 0
     },
     {
       team: "MD",
       points: 3,
-      goalDifference: -6
+      goalDifference: -8
     },
     {
       team: "TR",
       points: 9,
-      goalDifference: 8
+      goalDifference: 7
     }
     ],
     I: [{
       team: "BE",
-      points: 9,
-      goalDifference: 7
+      points: 12,
+      goalDifference: 10
     },
     {
       team: "CY",
       points: 3,
-      goalDifference: 2
+      goalDifference: 1
     },
     {
       team: "KZ",
-      points: 3,
-      goalDifference: -4
+      points: 6,
+      goalDifference: 0
     },
     {
       team: "RU",
-      points: 6,
-      goalDifference: 11
+      points: 9,
+      goalDifference: 12
     },
     {
       team: "SM",
       points: 0,
-      goalDifference: -16
+      goalDifference: -20
     },
     {
       team: "SQ",
       points: 6,
-      goalDifference: 0
+      goalDifference: -3
     }
     ],
     J: [{
       team: "AM",
-      points: 3,
-      goalDifference: 0
+      points: 6,
+      goalDifference: 1
     },
     {
       team: "BA",
       points: 4,
-      goalDifference: -1
+      goalDifference: -2
     },
     {
       team: "FI",
-      points: 6,
-      goalDifference: 2
+      points: 9,
+      goalDifference: 4
     },
     {
       team: "GR",
       points: 4,
-      goalDifference: -1
+      goalDifference: -2
     },
     {
       team: "IT",
       points: 9,
-      goalDifference: 11
+      goalDifference: 12
     },
     {
       team: "LI",
       points: 0,
-      goalDifference: -11
+      goalDifference: -13
     }
     ]
   },
@@ -975,31 +810,6 @@ const printStandings = () => {
 
 const fixtures = {
   EQ: [
-    ["A", "BG", ["BG", "KO"]],
-    ["A", "CZ", ["CZ", "ME"]],
-    ["D", "DK", ["DK", "GE"]],
-    ["F", "FO", ["FO", "NO"]],
-    ["D", "IE", ["IE", "GI"]],
-    ["G", "LV", ["LV", "SI"]],
-    ["F", "MT", ["MT", "RO"]],
-    ["G", "NM", ["NM", "AT"]],
-    ["G", "PL", ["PL", "IL"]],
-    ["B", "RS", ["RS", "LT"]],
-    ["F", "ES", ["ES", "SE"]],
-    ["B", "UA", ["UA", "LU"]],
-    ["H", "AL", ["AL", "MD"]],
-    ["H", "AD", ["AD", "FR"]],
-    ["E", "AZ", ["AZ", "SK"]],
-    ["C", "BY", ["BY", "EI"]],
-    ["I", "BE", ["BE", "SQ"]],
-    ["C", "DE", ["DE", "EE"]],
-    ["J", "GR", ["GR", "AM"]],
-    ["E", "HU", ["HU", "WA"]],
-    ["H", "IS", ["IS", "TR"]],
-    ["J", "IT", ["IT", "BA"]],
-    ["I", "KZ", ["KZ", "SM"]],
-    ["J", "LI", ["LI", "FI"]],
-    ["I", "RU", ["RU", "CY"]],
     ["J", "AM", ["AM", "IT"]],
     ["J", "BA", ["BA", "LI"]],
     ["F", "FO", ["FO", "SE"]],
@@ -1249,7 +1059,7 @@ const simulateResult = probabilities => {
 };
 
 const evaluatedStats = {
-  EC: {
+  EQ: {
     qualifyFromGroup: 0,
     qualifyToPlayoffs: 0,
     qualifyFromPlayoffs: 0
