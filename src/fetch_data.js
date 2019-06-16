@@ -5,36 +5,45 @@ const datafiles = {
   ratings: 'World',
 }
 
+const fetchData = async key => {
+  const datafile = datafiles[key];
+  const timestamp = Date.now();
+
+  const { data } = await axios.get(`http://eloratings.net/${datafile}.tsv?_=${timestamp}`);
+  return data;
+};
+
 const readFile = (filename) => fs.readFileSync(`./data/${filename}.csv`, 'latin1');
 
-const loadTeams = () => {
-  const data = readFile('teams').toString();
-  return data.split('\r\n').reduce((acc, cur) => {
-    if (cur) {
-      const [code, name] = cur.split(',');
+const loadTeams = async () => {
+  const ratings = await fetchData('ratings');
+  const ratingsData = ratings.split('\n');
+  const teamRatings = ratingsData.reduce((acc, teamData) => {
+    const teamDataFields = teamData.split('\t');
+
+    const code = teamDataFields[2];
+    const rating = teamDataFields[3];
+
+    acc[code] = rating;
+    return acc;
+  }, {});
+
+  const teamsData = readFile('teams').toString().split('\r\n');
+  const teams = teamsData.reduce((acc, teamData) => {
+    if (teamData) {
+      const [code, name] = teamData.split(',');
       acc[code] = name;
+    }
+    return acc;
+  }, {});
+
+  return Object.entries(teamRatings).reduce((acc, [code, rating]) => {
+    acc[code] = {
+      name: teams[code],
+      rating,
     }
     return acc;
   }, {});
 };
 
-const fetchData = key => {
-  const datafile = datafiles[key];
-  const timestamp = Date.now();
-  axios.get(`http://eloratings.net/${datafile}.tsv?_=${timestamp}`).then(({ data }) => {
-    const teamsData = data.split('\n');
-    const teams = teamsData.map(team => {
-      const teamData = team.split('\t');
-
-      const code = teamData[2];
-      const rating = teamData[3];
-
-      return {
-        [code]: { rating }
-      };
-    });
-    console.log(teams);
-  });
-};
-
-console.log(loadTeams());
+loadTeams().then(response => console.log(response));
