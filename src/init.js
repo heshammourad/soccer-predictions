@@ -1,22 +1,82 @@
 const moment = require("moment");
 
-const {
-  dataFiles,
-  fetchData,
-  getFileStats,
-  readFile,
-  writeFile
-} = require("./data");
+const { lineBreak } = require("./configuration");
+const { dataFiles, fetchData, readFile, writeFile } = require("./data");
+const { isFileCacheExpired, updateStandings } = require("./utils");
+
+exports.loadFixtures = async tournamentCode => {
+  const fixturesFile = `${tournamentCode}/fixtures`;
+  if (!isFileCacheExpired(fixturesFile)) {
+    return JSON.parse(readFile(fixturesFile));
+  }
+
+  const fixturesData = await fetchData(`${dataFiles[tournamentCode]}fixtures`);
+  const fixtures = fixturesData.split("\n").reduce((acc, fixtureData) => {
+    const fields = fixtureData.split("\t");
+
+    const fixtureTournament = fields[5];
+    if (fixtureTournament === tournamentCode) {
+      acc.push({
+        teams: [fields[3], fields[4]],
+        location: fields[6]
+      });
+    }
+    return acc;
+  }, []);
+
+  writeFile(fixturesFile, fixtures);
+
+  return fixtures;
+};
+
+const loadStandings = async tournamentCode => {
+  const standingsFile = `${tournamentCode}/standings`;
+  if (!isFileCacheExpired(standingsFile)) {
+    return JSON.parse(readFile(standingsFile));
+  }
+
+  const groups = JSON.parse(readFile(`${tournamentCode}/groups`));
+  const standings = Object.entries(groups).reduce((acc, [group, teams]) => {
+    const groupTeams = teams.reduce((tAcc, team) => {
+      tAcc[team] = {
+        goalDifference: 0,
+        group,
+        points: 0
+      };
+      return tAcc;
+    }, {});
+    return { ...acc, ...groupTeams };
+  }, {});
+
+  const resultsData = await fetchData(`${dataFiles[tournamentCode]}latest`);
+  resultsData.split("\n").forEach(line => {
+    const fields = line.split("\t");
+
+    const resultTournament = fields[7];
+    if (resultTournament === tournamentCode) {
+      const team1 = fields[3];
+      const team2 = fields[4];
+      const score1 = fields[5];
+      const score2 = fields[6];
+
+      const goalDifference = score1 - score2;
+
+      updateStandings(standings, team1, goalDifference);
+      updateStandings(standings, team2, -goalDifference);
+    }
+  });
+
+  writeFile(standingsFile, standings);
+
+  return standings;
+};
 
 const loadTeams = async () => {
-  const { mtime } = getFileStats(dataFiles.teamRatings);
-
-  if (mtime && moment(mtime).isSameOrAfter(moment().subtract(1, "day"))) {
-    console.log("returning saved data");
+  if (!isFileCacheExpired(dataFiles.teamRatings)) {
     return JSON.parse(readFile(dataFiles.teamRatings));
   }
-  
-  const ratings = await fetchData("ratings");
+
+  const ratings = await fetchData(dataFiles.ratings);
   const ratingsData = ratings.split("\n");
   const teamRatings = ratingsData.reduce((acc, teamData) => {
     const teamDataFields = teamData.split("\t");
@@ -30,7 +90,7 @@ const loadTeams = async () => {
 
   const teamsData = readFile(dataFiles.teamNames)
     .toString()
-    .split("\r\n");
+    .split(lineBreak);
   const teamNames = teamsData.reduce((acc, teamData) => {
     if (teamData) {
       const [code, name] = teamData.split(",");
@@ -52,4 +112,12 @@ const loadTeams = async () => {
   return teams;
 };
 
-loadTeams().then(response => console.log(response));
+exports.init = async tournamentCode => {
+  const standings = await loadStandings(tournamentCode);
+  const teamRatings = await loadTeams();
+  const nationsLeagueStandings = JSON.parse(
+    readFile(dataFiles.nationsLeagueStandings)
+  );
+
+  return { nationsLeagueStandings, standings, teamRatings };
+};

@@ -1,5 +1,7 @@
 module.exports = {
+  cacheFileDuration: [1, "day"],
   dataPath: "./data/",
-  simulations: 10000,
+  lineBreak: '\r\n',
+  simulations: 1,
   tournament: "EQ"
 };

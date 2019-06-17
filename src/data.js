@@ -4,18 +4,18 @@ const fs = require("fs");
 const { dataPath } = require("./configuration");
 
 const dataFiles = {
+  EQ: "2020_European_Championship_qualifying_",
+  nationsLeagueStandings: "nations_league_standings",
   ratings: "World",
   teamRatings: "team_ratings",
   teamNames: "teams.csv"
 };
 
-exports.fetchData = async key => {
-  const datafile = dataFiles[key];
+exports.fetchData = async filename => {
   const timestamp = Date.now();
+  const url = `http://eloratings.net/${filename}.tsv?_=${timestamp}`;
 
-  const { data } = await axios.get(
-    `http://eloratings.net/${datafile}.tsv?_=${timestamp}`
-  );
+  const { data } = await axios.get(url);
   return data;
 };
 
