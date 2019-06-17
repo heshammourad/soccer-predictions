@@ -1,2 +1,5 @@
-exports.simulations = 10000;
-exports.tournament = "EQ";
+module.exports = {
+  dataPath: "./data/",
+  simulations: 10000,
+  tournament: "EQ"
+};
