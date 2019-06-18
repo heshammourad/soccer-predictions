@@ -1,10 +1,8 @@
-const moment = require("moment");
-
 const { lineBreak } = require("./configuration");
 const { dataFiles, fetchData, readFile, writeFile } = require("./data");
 const { isFileCacheExpired, updateStandings } = require("./utils");
 
-exports.loadFixtures = async tournamentCode => {
+const loadFixtures = async tournamentCode => {
   const fixturesFile = `${tournamentCode}/fixtures`;
   if (!isFileCacheExpired(fixturesFile)) {
     return JSON.parse(readFile(fixturesFile));
@@ -82,7 +80,7 @@ const loadTeams = async () => {
     const teamDataFields = teamData.split("\t");
 
     const code = teamDataFields[2];
-    const rating = teamDataFields[3];
+    const rating = parseInt(teamDataFields[3], 10);
 
     acc[code] = rating;
     return acc;
@@ -113,11 +111,12 @@ const loadTeams = async () => {
 };
 
 exports.init = async tournamentCode => {
+  const fixtures = await loadFixtures(tournamentCode);
   const standings = await loadStandings(tournamentCode);
   const teamRatings = await loadTeams();
   const nationsLeagueStandings = JSON.parse(
     readFile(dataFiles.nationsLeagueStandings)
   );
 
-  return { nationsLeagueStandings, standings, teamRatings };
+  return { fixtures, nationsLeagueStandings, standings, teamRatings };
 };

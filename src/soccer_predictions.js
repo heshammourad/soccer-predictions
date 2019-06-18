@@ -1,6 +1,6 @@
 const { simulations, tournament } = require("./configuration");
 const { init } = require("./init");
-const { getProbabilities, simulateResult } = require("./simulation");
+const { simulateResult } = require("./simulation");
 const { updateStandings } = require("./utils");
 
 let fixtures;
@@ -37,17 +37,12 @@ const getTeamRank = team => getNationsLeagueRank().findIndex(t => t === team);
 let simStandings;
 
 const resetStandings = () => {
-  simStandings = Object.entries(standings[tournament]).reduce(
-    (acc, [group, teams]) => {
-      acc[group] = teams.map(team => ({
-        points: 0,
-        goalDifference: 0,
-        ...team
-      }));
-      return acc;
-    },
-    {}
-  );
+  simStandings = Object.entries(standings).reduce((acc, [team, teamInfo]) => {
+    acc[team] = {
+      ...teamInfo
+    };
+    return acc;
+  }, {});
 };
 
 const sortFunction = (a, b) => {
@@ -61,6 +56,19 @@ const sortFunction = (a, b) => {
 };
 
 const sortStandings = () => {
+  simStandings = Object.entries(simStandings).reduce(
+    (acc, [team, { group, ...values }]) => {
+      if (!acc[group]) {
+        acc[group] = [];
+      }
+      acc[group].push({
+        team,
+        ...values
+      });
+      return acc;
+    },
+    {}
+  );
   Object.values(simStandings).forEach(teams => {
     teams.sort(sortFunction);
   });
@@ -116,18 +124,7 @@ const evaluatedStats = {
   }
 };
 
-const stats = Object.entries(standings[tournament]).reduce(
-  (acc, [group, teams]) => {
-    acc[group] = teams.reduce((teamAcc, { team }) => {
-      teamAcc[team] = {
-        ...evaluatedStats[tournament]
-      };
-      return teamAcc;
-    }, {});
-    return acc;
-  },
-  {}
-);
+let stats;
 
 const printStats = () => {
   const statPrint = Object.entries(stats).reduce((acc, [group, teams]) => {
@@ -311,6 +308,8 @@ const updateStats = stage => {
       const getPot = teams =>
         teams.filter(team => !selectedTeams.includes(team));
       const drawTeam = pot => pot[Math.floor(Math.random() * pot.length)];
+
+      console.log(paths);
 
       const draws = Object.entries(paths).reduce(
         (acc, [league, { groupWinners, rest }], idx, src) => {
@@ -502,6 +501,7 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
   const [favorite, underdog] =
     team1Rating >= team2Rating ? teams : [...teams].reverse();
 
+  const ratingDifference = Math.abs(team1Rating - team2Rating);
   const result = simulateResult(ratingDifference);
 
   if (!isPenaltyShootout) {
@@ -509,6 +509,7 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
     updateStandings(simStandings, underdog, -result);
   }
 
+  const goalDifference = Math.abs(result);
   let kAdj = 1;
   if (goalDifference === 2) {
     kAdj = 1.5;
@@ -574,7 +575,19 @@ const simulateKnockouts = (knockouts, stats, location) => {
 };
 
 exports.runSimulation = async () => {
-  ({ fixtures, nationsLeagueStandings, standings, teamRatings } = await init());
+  ({ fixtures, nationsLeagueStandings, standings, teamRatings } = await init(
+    tournament
+  ));
+
+  stats = Object.entries(standings).reduce((acc, [team, { group }]) => {
+    if (!acc[group]) {
+      acc[group] = {};
+    }
+    acc[group][team] = {
+      ...evaluatedStats[tournament]
+    };
+    return acc;
+  }, {});
 
   for (let sim = 0; sim < simulations; sim++) {
     resetRatings();
@@ -588,6 +601,8 @@ exports.runSimulation = async () => {
 
     switch (tournament) {
       case "EQ": {
+        console.log(playoffs);
+
         Object.values(playoffs).forEach(([team1, team2, team3, team4]) => {
           const winner1 = simulateMatch({
             location: team1,

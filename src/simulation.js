@@ -166,9 +166,8 @@ exports.simulateResult = ratingDifference => {
   for (let [goalDifference, probability] of Object.entries(probabilities)) {
     total += probability;
     if (random <= total) {
-      return goalDifference;
+      return Number.parseInt(goalDifference);
     }
   }
-  
-  return Object.keys(proabilities).pop();
+  throw Error('Simulation failed');
 }

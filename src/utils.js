@@ -22,4 +22,4 @@ exports.updateStandings = (standings, team, goalDifference) => {
 
   standings[team].points += points;
   standings[team].goalDifference += goalDifference;
-}
+};
