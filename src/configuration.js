@@ -3,5 +3,5 @@ module.exports = {
   dataPath: "./data/",
   lineBreak: '\r\n',
   simulations: 10000,
-  tournament: "EQ"
+  tournament: "CA"
 };

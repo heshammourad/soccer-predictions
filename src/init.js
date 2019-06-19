@@ -1,16 +1,15 @@
 const { lineBreak } = require("./configuration");
-const { dataFiles, fetchData, readFile, writeFile } = require("./data");
-const { isFileCacheExpired, updateStandings } = require("./utils");
+const { dataFiles, fetchData, readFile } = require("./data");
+const { updateStandings } = require("./utils");
 
 const loadFixtures = async tournamentCode => {
-  const fixturesFile = `${tournamentCode}/fixtures`;
-  if (!isFileCacheExpired(fixturesFile)) {
-    return JSON.parse(readFile(fixturesFile));
-  }
+  const fixturesData = await fetchData(
+    `${dataFiles[tournamentCode]}fixtures`,
+    `${tournamentCode}/fixtures`
+  );
 
-  const fixturesData = await fetchData(`${dataFiles[tournamentCode]}fixtures`);
-  const fixtures = fixturesData.split("\n").reduce((acc, fixtureData) => {
-    const fields = fixtureData.split("\t");
+  const fixtures = fixturesData.split("\\n").reduce((acc, fixtureData) => {
+    const fields = fixtureData.split("\\t");
 
     const fixtureTournament = fields[5];
     if (fixtureTournament === tournamentCode) {
@@ -22,17 +21,10 @@ const loadFixtures = async tournamentCode => {
     return acc;
   }, []);
 
-  writeFile(fixturesFile, fixtures);
-
   return fixtures;
 };
 
 const loadStandings = async tournamentCode => {
-  const standingsFile = `${tournamentCode}/standings`;
-  if (!isFileCacheExpired(standingsFile)) {
-    return JSON.parse(readFile(standingsFile));
-  }
-
   const groups = JSON.parse(readFile(`${tournamentCode}/groups`));
   const standings = Object.entries(groups).reduce((acc, [group, teams]) => {
     const groupTeams = teams.reduce((tAcc, team) => {
@@ -46,9 +38,13 @@ const loadStandings = async tournamentCode => {
     return { ...acc, ...groupTeams };
   }, {});
 
-  const resultsData = await fetchData(`${dataFiles[tournamentCode]}latest`);
-  resultsData.split("\n").forEach(line => {
-    const fields = line.split("\t");
+  const resultsData = await fetchData(
+    `${dataFiles[tournamentCode]}latest`,
+    `${tournamentCode}/results`
+  );
+
+  resultsData.split("\\n").forEach(line => {
+    const fields = line.split("\\t");
 
     const resultTournament = fields[7];
     if (resultTournament === tournamentCode) {
@@ -64,20 +60,15 @@ const loadStandings = async tournamentCode => {
     }
   });
 
-  writeFile(standingsFile, standings);
-
   return standings;
 };
 
 const loadTeams = async () => {
-  if (!isFileCacheExpired(dataFiles.teamRatings)) {
-    return JSON.parse(readFile(dataFiles.teamRatings));
-  }
+  const ratings = await fetchData(dataFiles.ratings, dataFiles.teamRatings);
 
-  const ratings = await fetchData(dataFiles.ratings);
-  const ratingsData = ratings.split("\n");
+  const ratingsData = ratings.split("\\n");
   const teamRatings = ratingsData.reduce((acc, teamData) => {
-    const teamDataFields = teamData.split("\t");
+    const teamDataFields = teamData.split("\\t");
 
     const code = teamDataFields[2];
     const rating = parseInt(teamDataFields[3], 10);
@@ -97,17 +88,13 @@ const loadTeams = async () => {
     return acc;
   }, {});
 
-  const teams = Object.entries(teamRatings).reduce((acc, [code, rating]) => {
+  return Object.entries(teamRatings).reduce((acc, [code, rating]) => {
     acc[code] = {
       name: teamNames[code],
       rating
     };
     return acc;
   }, {});
-
-  writeFile(dataFiles.teamRatings, teams);
-
-  return teams;
 };
 
 exports.init = async tournamentCode => {

@@ -160,14 +160,15 @@ const getProbabilities = ratingDifference =>
 
 exports.simulateResult = ratingDifference => {
   const probabilities = getProbabilities(ratingDifference);
-  
-  const random = Math.random();
-  let total = 0;
-  for (let [goalDifference, probability] of Object.entries(probabilities)) {
-    total += probability;
-    if (random <= total) {
-      return Number.parseInt(goalDifference);
+
+  while (true) {
+    const random = Math.random();
+    let total = 0;
+    for (let [goalDifference, probability] of Object.entries(probabilities)) {
+      total += probability;
+      if (random <= total) {
+        return Number.parseInt(goalDifference);
+      }
     }
   }
-  throw Error('Simulation failed');
-}
+};

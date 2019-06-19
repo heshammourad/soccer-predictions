@@ -309,11 +309,47 @@ const updateStats = stage => {
         teams.filter(team => !selectedTeams.includes(team));
       const drawTeam = pot => pot[Math.floor(Math.random() * pot.length)];
 
-      console.log(paths);
-
       const draws = Object.entries(paths).reduce(
         (acc, [league, { groupWinners, rest }], idx, src) => {
+          if (acc[league]) {
+            return acc;
+          }
+
           const drawTeams = [...groupWinners];
+
+          if (!drawTeams.length) {
+            const teamsAvailable = src.reduce(
+              (tAcc, cur, tIdx) => {
+                const r = getPot(cur[1].rest);
+                if (tIdx > idx) {
+                  tAcc[1].push(...getPot(cur[1].groupWinners), ...r);
+                } else {
+                  tAcc[0].push(...r);
+                }
+                return tAcc;
+              },
+              [[], []]
+            );
+
+            if (teamsAvailable[0].length < 4) {
+              const allTeams = [].concat(...teamsAvailable).sort(sortFunction);
+              const draw1 = [];
+              const draw2 = [];
+
+              while (allTeams.length) {
+                const pot = allTeams.splice(0, 2);
+                if (Math.random() > 0.5) {
+                  pot.reverse();
+                }
+                draw1.push(pot.pop());
+                draw2.push(pot.pop());
+              }
+
+              acc[league] = draw1;
+              acc[src[idx + 1][0]] = draw2;
+              return acc;
+            }
+          }
 
           const teamsLeftToDraw = () => 4 - drawTeams.length;
           if (teamsLeftToDraw) {
@@ -601,8 +637,6 @@ exports.runSimulation = async () => {
 
     switch (tournament) {
       case "EQ": {
-        console.log(playoffs);
-
         Object.values(playoffs).forEach(([team1, team2, team3, team4]) => {
           const winner1 = simulateMatch({
             location: team1,
