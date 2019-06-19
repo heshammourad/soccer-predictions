@@ -682,5 +682,5 @@ exports.runSimulation = async () => {
     }
   }
 
-  printStats();
+  printStats(); // TODO: output to ./data
 };
