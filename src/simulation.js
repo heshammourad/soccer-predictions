@@ -172,3 +172,45 @@ exports.simulateResult = ratingDifference => {
     }
   }
 };
+
+const weights = {
+  AC: 50,
+  AR: 50,
+  ASC: 40,
+  BLC: 30,
+  CA: 50,
+  CAQ: 40,
+  CC: 50,
+  CCH: 50,
+  CCQ: 40,
+  CFC: 40,
+  CRC: 40,
+  CSF: 40,
+  EAH: 40,
+  EAQ: 40,
+  EC: 50,
+  ECA: 40,
+  EQ: 40,
+  F: 20,
+  FBQ: 40,
+  FQ: 40,
+  FT: 30,
+  GLF: 40,
+  IOG: 30,
+  KNG: 30,
+  NQC: 40,
+  OC: 50,
+  PMG: 40,
+  SEA: 40,
+  SEQ: 40,
+  SFF: 40,
+  SQ: 40,
+  WC: 60,
+  WIT: 30,
+  WOQ: 40,
+  WQ: 40,
+  WQO: 50,
+  WQS: 40
+};
+
+exports.getWeight = tournament => weights[tournament];

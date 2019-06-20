@@ -2,14 +2,15 @@ const axios = require("axios");
 const fs = require("fs");
 const moment = require("moment");
 
-const { cacheFileDuration, dataPath } = require("./configuration");
+const { cacheFileDuration, dataPath, forceReload } = require("./configuration");
 
 const dataFiles = {
   AR: "2019_African_Nations_Cup_",
   CA: "2019_Copa_America_",
+  CCH: "2019_CONCACAF_Championship_",
   EQ: "2020_European_Championship_qualifying_",
-  nationsLeagueStandings: "nations_league_standings",
-  ratings: "World",
+  nationsLeagueStandings: "EQ/nations_league_standings",
+  ratings: "2018_World_Cup_start",
   teamRatings: "team_ratings",
   teamNames: "teams.csv"
 };
@@ -31,7 +32,7 @@ exports.getFileStats = filename => {
 };
 
 exports.fetchData = async (pathname, cacheFile) => {
-  if (this.isFileCacheExpired(cacheFile)) {
+  if (forceReload || this.isFileCacheExpired(cacheFile)) {
     const timestamp = Date.now();
     const url = `http://eloratings.net/${pathname}.tsv?_=${timestamp}`;
 

@@ -1,6 +1,6 @@
 const { simulations, tournament } = require("./configuration");
 const { init } = require("./init");
-const { simulateResult } = require("./simulation");
+const { getWeight, simulateResult } = require("./simulation");
 const { updateStandings } = require("./utils");
 
 let fixtures;
@@ -9,6 +9,13 @@ let standings;
 let teamRatings;
 
 let simRatings;
+
+const locations = {
+  AR: "EG",
+  CA: "BR",
+  CCH: "US",
+  WC: "RU"
+};
 
 const resetRatings = () => {
   simRatings = Object.entries(teamRatings).reduce((acc, [team, info]) => {
@@ -121,6 +128,15 @@ const evaluatedStats = {
     semifinals: 0,
     final: 0,
     champions: 0
+  },
+  WC: {
+    first: 0,
+    second: 0,
+    roundOf16: 0,
+    quarterfinals: 0,
+    semifinals: 0,
+    final: 0,
+    champions: 0
   }
 };
 
@@ -180,7 +196,7 @@ const getBestTeamsOfRank = (rank, teamCount, automaticStat) => {
         const stat = rankStatNames[index];
         if (index < rankIndex) {
           addStats(group, teamCode, stat, automaticStat);
-        } else if (index === rankIndex) {
+        } else if (index === rankIndex && teamCount) {
           addStats(group, teamCode, stat);
           acc.push({
             ...team,
@@ -523,6 +539,46 @@ const updateStats = stage => {
 
       return knockouts;
     }
+    case "WC": {
+      const knockouts = [];
+
+      getBestTeamsOfRank(3, 0, "roundOf16");
+
+      knockouts.push([
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("B", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("C", 1),
+        getTeamFromStandings("D", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("E", 1),
+        getTeamFromStandings("F", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("G", 1),
+        getTeamFromStandings("H", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("B", 1),
+        getTeamFromStandings("A", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("D", 1),
+        getTeamFromStandings("C", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("F", 1),
+        getTeamFromStandings("E", 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings("H", 1),
+        getTeamFromStandings("G", 2)
+      ]);
+      
+      return knockouts;
+    }
     default:
       break;
   }
@@ -552,7 +608,7 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
   } else if (goalDifference >= 3) {
     kAdj = 1.75 + (goalDifference - 3) / 8;
   }
-  const k = 40 * kAdj;
+  const k = getWeight(tournament) * kAdj;
 
   let w = 0.5;
   let winner;
@@ -598,9 +654,10 @@ const simulateRound = (location, stat) => (acc, teams, idx) => {
   return acc;
 };
 
-const simulateKnockouts = (knockouts, stats, location) => {
+const simulateKnockouts = (knockouts, stats) => {
   let round = [...knockouts];
   const roundStats = [...stats];
+  const location = locations[tournament];
 
   do {
     const roundStat = roundStats.shift();
@@ -665,17 +722,17 @@ exports.runSimulation = async () => {
         break;
       }
       case "CA":
-        simulateKnockouts(playoffs, ["semifinals", "final", "champions"], "BR");
+        simulateKnockouts(playoffs, ["semifinals", "final", "champions"]);
         break;
       case "AR":
+      case "WC":
         simulateKnockouts(
           playoffs,
-          ["quarterfinals", "semifinals", "final", "champions"],
-          "EG"
+          ["quarterfinals", "semifinals", "final", "champions"]
         );
         break;
       case "CCH":
-        simulateKnockouts(playoffs, ["semifinals", "final", "champions", "US"]);
+        simulateKnockouts(playoffs, ["semifinals", "final", "champions"]);
         break;
       default:
         break;

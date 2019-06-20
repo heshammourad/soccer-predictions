@@ -38,6 +38,10 @@ const loadStandings = async tournamentCode => {
     return { ...acc, ...groupTeams };
   }, {});
 
+  if (tournamentCode === 'WC') {
+    return standings;
+  }
+
   const resultsData = await fetchData(
     `${dataFiles[tournamentCode]}latest`,
     `${tournamentCode}/results`
