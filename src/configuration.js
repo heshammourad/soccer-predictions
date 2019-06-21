@@ -4,5 +4,5 @@ module.exports = {
   forceReload: false,
   lineBreak: '\r\n',
   simulations: 10000,
-  tournament: "WC"
+  tournament: "CLB"
 };

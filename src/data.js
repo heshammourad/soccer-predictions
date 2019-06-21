@@ -8,9 +8,11 @@ const dataFiles = {
   AR: "2019_African_Nations_Cup_",
   CA: "2019_Copa_America_",
   CCH: "2019_CONCACAF_Championship_",
+  CLA: "2019_CONCACAF_Nations_League_A_",
+  CLB: "2019_CONCACAF_Nations_League_B_",
   EQ: "2020_European_Championship_qualifying_",
   nationsLeagueStandings: "EQ/nations_league_standings",
-  ratings: "2018_World_Cup_start",
+  ratings: "World",
   teamRatings: "team_ratings",
   teamNames: "teams.csv"
 };

@@ -170,6 +170,7 @@ exports.simulateResult = ratingDifference => {
         return Number.parseInt(goalDifference);
       }
     }
+    console.warn("Repeating result simulation", random, total, probabilities, ratingDifference);
   }
 };
 
@@ -184,6 +185,9 @@ const weights = {
   CCH: 50,
   CCQ: 40,
   CFC: 40,
+  CLA: 40,
+  CLB: 40,
+  CLC: 40,
   CRC: 40,
   CSF: 40,
   EAH: 40,
