@@ -137,7 +137,10 @@ const evaluatedStats = {
   },
   CLB: {
     promoted: 0,
-    relegated: 0,
+    relegated: 0
+  },
+  CLC: {
+    promoted: 0
   },
   WC: {
     first: 0,
@@ -150,28 +153,113 @@ const evaluatedStats = {
   }
 };
 
+const sortStats = t => ([teamA, totalsA], [teamB, totalsB]) => {
+  const order = [];
+
+  switch (t) {
+    case "EQ": {
+      const getTotalQualify = team =>
+        team.qualifyFromGroup + team.qualifyFromPlayoffs;
+
+      const aTotal = getTotalQualify(totalsA);
+      const bTotal = getTotalQualify(totalsB);
+      if (aTotal !== bTotal) {
+        return bTotal - aTotal;
+      }
+
+      order.push(
+        "qualifyFromGroup",
+        "qualifyFromPlayoffs",
+        "qualifyToPlayoffs"
+      );
+      break;
+    }
+    case "CA":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "first",
+        "second",
+        "third"
+      );
+      break;
+    case "AR":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "roundOf16",
+        "first",
+        "second",
+        "third"
+      );
+      break;
+    case "CCH":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "first",
+        "second"
+      );
+      break;
+    case "CLA":
+      order.push("champions", "finals", "!relegated");
+      break;
+    case "CLB":
+      order.push("promoted", "!relegated");
+      break;
+    case "CLC":
+      order.push("promoted");
+      break;
+    default:
+      break;
+  }
+
+  for (let stat of order) {
+    if (stat.startsWith("!")) {
+      const s = stat.substr(1);
+      if (totalsA[s] !== totalsB[s]) {
+        return totalsA[s] - totalsB[s];
+      }
+    }
+    if (totalsA[stat] !== totalsB[stat]) {
+      return totalsB[stat] - totalsA[stat];
+    }
+  }
+
+  return teamA > teamB ? 1 : -1;
+};
+
 let stats;
 
 const printStats = () => {
   const statPrint = Object.entries(stats).reduce((acc, [group, teams]) => {
     acc += `Group ${group}:\n`;
-    acc += Object.entries(teams).reduce((tAcc, [team, totals]) => {
-      const [c, { name }] = Object.entries(teamRatings).find(
-        ([code]) => code === team
-      );
-      tAcc += `${name}`;
 
-      const valuePrint = Object.values(totals).reduce((vAcc, total) => {
-        const percentage = Math.round((total / simulations) * 100);
-        vAcc += `,${percentage}%`;
+    acc += Object.entries(teams)
+      .sort(sortStats(tournament))
+      .reduce((tAcc, [team, totals]) => {
+        const [c, { name }] = Object.entries(teamRatings).find(
+          ([code]) => code === team
+        );
+        tAcc += `${name}`;
 
-        return vAcc;
+        const valuePrint = Object.values(totals).reduce((vAcc, total) => {
+          const percentage = Math.round((total / simulations) * 100);
+          vAcc += `,${percentage}%`;
+
+          return vAcc;
+        }, "");
+
+        tAcc += `${valuePrint}\n`;
+
+        return tAcc;
       }, "");
-
-      tAcc += `${valuePrint}\n`;
-
-      return tAcc;
-    }, "");
     return `${acc}\n`;
   }, "");
 
@@ -592,9 +680,8 @@ const updateStats = stage => {
     }
     case "CLA": {
       const finals = [];
-      
-      const groups = ["A", "B", "C", "D"];
-      let finalsTeams = groups.reduce((acc, group) => {
+
+      let finalsTeams = Object.keys(simStandings).reduce((acc, group) => {
         addStats(group, getTeamFromStandings(group, 3), "relegated");
 
         const finalQualifier = getTeamFromStandings(group, 1);
@@ -618,13 +705,18 @@ const updateStats = stage => {
       return finals;
     }
     case "CLB": {
-      ["A", "B", "C", "D"].forEach(group => {
+      Object.keys(simStandings).forEach(group => {
         const addTeamResult = (rank, stat) => {
           addStats(group, getTeamFromStandings(group, rank), stat);
-        }
-        addTeamResult(1, 'promoted');
-        addTeamResult(4, 'relegated');
-      })
+        };
+        addTeamResult(1, "promoted");
+        addTeamResult(4, "relegated");
+      });
+    }
+    case "CLC": {
+      Object.keys(simStandings).forEach(group => {
+        addStats(group, getTeamFromStandings(group, 1), "promoted");
+      });
     }
     default:
       break;

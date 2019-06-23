@@ -10,6 +10,7 @@ const dataFiles = {
   CCH: "2019_CONCACAF_Championship_",
   CLA: "2019_CONCACAF_Nations_League_A_",
   CLB: "2019_CONCACAF_Nations_League_B_",
+  CLC: "2019_CONCACAF_Nations_League_C_",
   EQ: "2020_European_Championship_qualifying_",
   nationsLeagueStandings: "EQ/nations_league_standings",
   ratings: "World",
