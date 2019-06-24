@@ -18,6 +18,14 @@ const dataFiles = {
   teamNames: "teams.csv"
 };
 
+const knockoutStageDates = {
+  AR: moment('2019-07-05'),
+  CA: moment('2019-06-27'),
+  CCH: moment('2019-06-29'),
+};
+
+exports.getKnockoutStageDate = tournament => knockoutStageDates[tournament];
+
 exports.readFile = filename =>
   fs.readFileSync(`${dataPath}${filename}`, "latin1");
 

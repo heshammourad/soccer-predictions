@@ -733,11 +733,16 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
     team1Rating >= team2Rating ? teams : [...teams].reverse();
 
   const ratingDifference = Math.abs(team1Rating - team2Rating);
-  const result = simulateResult(ratingDifference);
+  let result = simulateResult(ratingDifference);
 
   if (!isPenaltyShootout) {
     updateStandings(simStandings, favorite, result);
     updateStandings(simStandings, underdog, -result);
+  }
+
+  if (isPenaltyShootout && !result) {
+    // Extra time
+    result = Math.round(simulateResult(ratingDifference * 0.4) / 2.5);
   }
 
   const goalDifference = Math.abs(result);
@@ -767,7 +772,8 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
 
   if (isPenaltyShootout && !winner) {
     const penaltyShootoutResult = Math.random();
-    winner = penaltyShootoutResult <= we ? favorite : underdog;
+    const penaltyWe = 0.5 + (we - 0.5) / 4;
+    winner = penaltyShootoutResult <= penaltyWe ? favorite : underdog;
   }
 
   return winner;

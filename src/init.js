@@ -1,5 +1,12 @@
+const moment = require("moment");
+
 const { lineBreak } = require("./configuration");
-const { dataFiles, fetchData, readFile } = require("./data");
+const {
+  getKnockoutStageDate,
+  dataFiles,
+  fetchData,
+  readFile
+} = require("./data");
 const { updateStandings } = require("./utils");
 
 const loadFixtures = async tournamentCode => {
@@ -11,8 +18,13 @@ const loadFixtures = async tournamentCode => {
   const fixtures = fixturesData.split("\\n").reduce((acc, fixtureData) => {
     const fields = fixtureData.split("\\t");
 
+    const fixtureDate = moment(fields.slice(0, 3).join("-"), 'YYYY-MM-DD');
+
     const fixtureTournament = fields[5];
-    if (fixtureTournament === tournamentCode) {
+    if (
+      fixtureTournament === tournamentCode &&
+      fixtureDate.isBefore(getKnockoutStageDate(tournamentCode))
+    ) {
       acc.push({
         teams: [fields[3], fields[4]],
         location: fields[6]
@@ -38,7 +50,7 @@ const loadStandings = async tournamentCode => {
     return { ...acc, ...groupTeams };
   }, {});
 
-  if (tournamentCode === 'WC') {
+  if (tournamentCode === "WC") {
     return standings;
   }
 
