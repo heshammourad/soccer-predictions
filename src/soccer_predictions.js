@@ -260,7 +260,7 @@ const printStats = () => {
 
         return tAcc;
       }, "");
-    return `${acc}\n`;
+    return `${acc}`;
   }, "");
 
   console.log(statPrint);
