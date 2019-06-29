@@ -1,14 +1,10 @@
+const groupBy = require("lodash.groupby");
+
 const { simulations, tournament } = require("./configuration");
+const { getKnockoutsStageDate } = require('./data');
 const { init } = require("./init");
 const { getWeight, simulateResult } = require("./simulation");
 const { updateStandings } = require("./utils");
-
-let fixtures;
-let nationsLeagueStandings;
-let standings;
-let teamRatings;
-
-let simRatings;
 
 const locations = {
   AR: "EG",
@@ -17,6 +13,24 @@ const locations = {
   CLA: "XX",
   WC: "RU"
 };
+
+let fixtures;
+let nationsLeagueStandings;
+let results;
+let standings;
+let teamRatings;
+
+let simRatings;
+
+const findResults = teams => {
+  const result = results.find(({ date, team1, team2 }) => 
+    teams.includes(team1) && teams.includes(team2) && date.isAfterOrEqual(getKnockoutsStageDate(tournament))
+  );
+  if (result) {
+    return goalDifference;
+  }
+  return null;
+}
 
 const resetRatings = () => {
   simRatings = Object.entries(teamRatings).reduce((acc, [team, info]) => {
@@ -63,22 +77,148 @@ const sortFunction = (a, b) => {
   return Math.random() - 0.5;
 };
 
-const sortStandings = () => {
-  simStandings = Object.entries(simStandings).reduce(
+const convertStandingsToArray = standingsToConvert => {
+  const standingsArray = Object.entries(standingsToConvert).reduce(
     (acc, [team, { group, ...values }]) => {
       if (!acc[group]) {
         acc[group] = [];
       }
       acc[group].push({
         team,
-        ...values
-      });
+        ...values});
       return acc;
     },
     {}
   );
+  return standingsArray;
+};
+
+const arTiebreaker = (teams, criteria, tiedTeamCount) => {
+  const goalDifferenceKeySort = (a, b) => {
+    const aKey = parseInt(a[0], 10);
+    const bKey = parseInt(b[0], 10);
+
+    return bKey - aKey;
+  };
+
+  switch (criteria) {
+    case "points": {
+      const ranks = groupBy(teams, criteria);
+
+      return Object.values(ranks).reduceRight((acc, rankTeams) => {
+        if (rankTeams.length === 1) {
+          acc.push(rankTeams[0]);
+        } else {
+          const tiebreakStandings = rankTeams.reduce((tAcc, { team }) => {
+            tAcc[team] = {
+              goalDifference: 0,
+              group: "tiebreaker",
+              points: 0
+            };
+            return tAcc;
+          }, {});
+
+          const isTeamInTiebreaker = team =>
+            Object.keys(tiebreakStandings).find(
+              tiebreakTeam => tiebreakTeam === team
+            );
+
+          const allResults = [...results, ...simResults];
+          allResults.forEach(({ team1, team2, goalDifference }) => {
+            if (isTeamInTiebreaker(team1) && isTeamInTiebreaker(team2)) {
+              updateStandings(tiebreakStandings, team1, goalDifference);
+              updateStandings(tiebreakStandings, team2, goalDifference);
+            }
+          });
+
+          const tiebreakTeams = convertStandingsToArray(
+            tiebreakStandings
+          ).tiebreaker.map(tiebreakTeam => {
+            console.log("rankTeams", rankTeams);
+            console.log("tiebreakTeam", tiebreakTeam);
+            const { goalDifference, points } = rankTeams.find(
+              rankTeam => rankTeam.team === tiebreakTeam.team
+            );
+            return {
+              ...tiebreakTeam,
+              overallPoints: points,
+              overallGoalDifference: goalDifference
+            };
+          });
+
+          acc.push(...arTiebreaker(tiebreakTeams, "h2hPoints"));
+        }
+
+        return acc;
+      }, []);
+    }
+    case "h2hPoints": {
+      const ranks = groupBy(teams, "points");
+
+      return Object.values(ranks).reduceRight((acc, rankTeams) => {
+        if (rankTeams.length === 1) {
+          acc.push(rankTeams[0]);
+        } else {
+          acc.push(...arTiebreaker(rankTeams, "h2hGoalDifference"));
+        }
+
+        return acc;
+      }, []);
+    }
+    case "h2hGoalDifference": {
+      const ranks = Object.entries(groupBy(teams, "goalDifference")).sort(
+        goalDifferenceKeySort
+      );
+
+      return Object.values(ranks).reduce((acc, rankTeams) => {
+        if (rankTeams.length === 1) {
+          acc.push(rankTeams[0]);
+        } else if (rankTeams.length === tiedTeamCount) {
+          acc.push(...arTiebreaker(rankTeams, "overallGoalDifference"));
+        } else {
+          acc.push(...arTiebreaker(rankTeams, "points"));
+        }
+      }, []);
+    }
+    case "overallGoalDifference": {
+      const ranks = Object.entries(groupBy(teams, criteria)).sort(
+        goalDifferenceKeySort
+      );
+
+      return Object.values(ranks).reduce((acc, rankTeams) => {
+        if (rankTeams.length === 1) {
+          acc.push(rankTeams[0]);
+        } else {
+          acc.push(...arTiebreaker(rankTeams));
+        }
+      }, []);
+    }
+    default: {
+      const drawnTeams = [];
+      const getPot = () => teams.filter(team => !drawnTeams.includes(team));
+
+      let pot = getPot();
+
+      while (pot.length) {
+        const drawnTeam = drawTeam(pot);
+
+        drawnTeams.push(drawnTeam);
+        pot = getPot();
+      }
+
+      return drawnTeams;
+    }
+  }
+};
+
+const sortStandings = () => {
+  simStandings = convertStandingsToArray(simStandings);
+
   Object.values(simStandings).forEach(teams => {
     teams.sort(sortFunction);
+    if (tournament === "AR") {
+      // teams = arTiebreaker(teams, "points");
+    }
   });
 };
 
@@ -287,7 +427,7 @@ const rankStatNames = ["first", "second", "third"];
 
 const getBestTeamsOfRank = (rank, teamCount, automaticStat) => {
   const rankIndex = rank - 1;
-  return Object.entries(simStandings)
+  const teams = Object.entries(simStandings)
     .reduce((acc, [group, teams]) => {
       teams.forEach((team, index) => {
         const teamCode = team.team;
@@ -306,6 +446,12 @@ const getBestTeamsOfRank = (rank, teamCount, automaticStat) => {
     }, [])
     .sort(sortFunction)
     .slice(0, teamCount);
+
+  teams.forEach(({ group, team }) => {
+    addStats(group, team, automaticStat);
+  });
+
+  return teams;
 };
 
 const drawTeam = pot => pot[Math.floor(Math.random() * pot.length)];
@@ -524,10 +670,6 @@ const updateStats = stage => {
         }
       );
 
-      thirdPlacedTeams.forEach(({ group, team }) => {
-        addStats(group, team, "quarterfinals");
-      });
-
       const knockouts = [];
 
       knockouts.push([getTeamFromStandings("A", 1), thirdPlacedTeams[0].team]);
@@ -724,7 +866,13 @@ const updateStats = stage => {
   return null;
 };
 
+const simResults = [];
+
 const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
+  if (isPenaltyShootout) {
+
+  }
+  
   const [team1Rating, team2Rating] = teams.map(
     team => simRatings[team].rating + (team === location ? 100 : 0)
   );
@@ -736,6 +884,11 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
   let result = simulateResult(ratingDifference);
 
   if (!isPenaltyShootout) {
+    simResults.push({
+      team1: favorite,
+      team2: underdog,
+      goalDifference: result
+    });
     updateStandings(simStandings, favorite, result);
     updateStandings(simStandings, underdog, -result);
   }
@@ -815,9 +968,13 @@ const simulateKnockouts = (knockouts, stats) => {
 };
 
 exports.runSimulation = async () => {
-  ({ fixtures, nationsLeagueStandings, standings, teamRatings } = await init(
-    tournament
-  ));
+  ({
+    fixtures,
+    nationsLeagueStandings,
+    results,
+    standings,
+    teamRatings
+  } = await init(tournament));
 
   stats = Object.entries(standings).reduce((acc, [team, { group }]) => {
     if (!acc[group]) {
@@ -830,6 +987,7 @@ exports.runSimulation = async () => {
   }, {});
 
   for (let sim = 0; sim < simulations; sim++) {
+    simResults.splice(0);
     resetRatings();
     resetStandings();
 
@@ -885,6 +1043,7 @@ exports.runSimulation = async () => {
         break;
       case "CLA":
         simulateKnockouts(playoffs, [null, "champions"]);
+        break;
       default:
         break;
     }
