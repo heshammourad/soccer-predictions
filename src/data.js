@@ -11,6 +11,7 @@ const dataFiles = {
   CLA: "2019_CONCACAF_Nations_League_A_",
   CLB: "2019_CONCACAF_Nations_League_B_",
   CLC: "2019_CONCACAF_Nations_League_C_",
+  EC: "2021_European_Championship_",
   EQ: "2020_European_Championship_qualifying_",
   nationsLeagueStandings: "EQ/nations_league_standings",
   ratings: "World",
@@ -22,6 +23,7 @@ const knockoutStageDates = {
   AR: moment('2019-07-05'),
   CA: moment('2019-06-27'),
   CCH: moment('2019-06-29'),
+  EC: moment('2021-06-26'),
 };
 
 exports.getKnockoutsStageDate = tournament => knockoutStageDates[tournament];

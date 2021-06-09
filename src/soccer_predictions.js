@@ -11,6 +11,7 @@ const locations = {
   CA: "BR",
   CCH: "US",
   CLA: "XX",
+  EC: "EN",
   WC: "RU"
 };
 
@@ -282,6 +283,16 @@ const evaluatedStats = {
   CLC: {
     promoted: 0
   },
+  EC: {
+    first: 0,
+    second: 0,
+    third: 0,
+    roundOf16: 0,
+    quarterfinals: 0,
+    semifinals: 0,
+    final: 0,
+    champions: 0
+  },
   WC: {
     first: 0,
     second: 0,
@@ -326,6 +337,7 @@ const sortStats = t => ([teamA, totalsA], [teamB, totalsB]) => {
       );
       break;
     case "AR":
+    case "EC":
       order.push(
         "champions",
         "final",
@@ -685,6 +697,79 @@ const updateStats = stage => {
 
       return knockouts;
     }
+    case "EC": {
+      const matchupIndices = {
+        ABCD: [0, 3, 1, 2],
+        ABCE: [0, 3, 1, 2],
+        ABCF: [0, 3, 1, 2],
+        ABDE: [2, 3, 0, 1],
+        ABDF: [2, 3, 0, 1],
+        ABEF: [3, 2, 1, 0],
+        ACDE: [3, 2, 1, 0],
+        ACDF: [3, 2, 1, 0],
+        ACEF: [2, 3, 1, 0],
+        ADEF: [2, 3, 1, 0],
+        BCDE: [3, 2, 0, 1],
+        BCDF: [3, 2, 1, 0],
+        BCEF: [3, 2, 1, 0],
+        BDEF: [3, 2, 1, 0],
+        CDEF: [3, 2, 1, 0],
+      };
+
+      const thirdPlacedTeams = getBestTeamsOfRank(3, 4, "roundOf16").sort(
+        (a, b) => {
+          const aGroup = a.group.charCodeAt();
+          const bGroup = b.group.charCodeAt();
+
+          return aGroup - bGroup;
+        }
+      );
+
+      const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
+        (acc, { group }) => acc + group,
+        ""
+      );
+      const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
+
+      const knockouts = [];
+
+      knockouts.push([
+        getTeamFromStandings("B", 1),
+        thirdPlacedTeams[scenarioIndices[0]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("C", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("F", 1),
+        thirdPlacedTeams[scenarioIndices[3]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("D", 2),
+        getTeamFromStandings("E", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("E", 1),
+        thirdPlacedTeams[scenarioIndices[2]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("D", 1),
+        getTeamFromStandings("F", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("C", 1),
+        thirdPlacedTeams[scenarioIndices[1]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("A", 2),
+        getTeamFromStandings("B", 2),
+      ]);
+
+      return knockouts;
+
+      break;
+    }
     case "AR": {
       const matchupIndices = {
         ABCD: [2, 3, 0, 1],
@@ -932,12 +1017,16 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
   return winner;
 };
 
+let locationsCountEC = 0;
+const locationsEC = ["ES", "EN", "RO", "DK", "SQ", "EN", "HU", "NL", "DE", "RU", "IT", "AZ", "EN", "EN", "EN"];
+
 const simulateRound = (location, stat) => (acc, teams, idx) => {
   const winner = simulateMatch({
-    location,
+    location: locationsEC[locationsCountEC % 15],
     teams,
     isPenaltyShootout: true
   });
+  locationsCountEC++;
 
   if (stat) {
     addStats(null, winner, stat);
@@ -1030,6 +1119,7 @@ exports.runSimulation = async () => {
         simulateKnockouts(playoffs, ["semifinals", "final", "champions"]);
         break;
       case "AR":
+      case "EC":
       case "WC":
         simulateKnockouts(playoffs, [
           "quarterfinals",
