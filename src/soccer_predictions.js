@@ -248,6 +248,7 @@ const evaluatedStats = {
     first: 0,
     second: 0,
     third: 0,
+    fourth: 0,
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
@@ -333,7 +334,8 @@ const sortStats = t => ([teamA, totalsA], [teamB, totalsB]) => {
         "quarterfinals",
         "first",
         "second",
-        "third"
+        "third",
+        "fourth"
       );
       break;
     case "AR":
@@ -435,7 +437,7 @@ const addStats = (group, team, ...statList) => {
   }
 };
 
-const rankStatNames = ["first", "second", "third"];
+const rankStatNames = ["first", "second", "third", "fourth"];
 
 const getBestTeamsOfRank = (rank, teamCount, automaticStat) => {
   const rankIndex = rank - 1;
@@ -673,27 +675,26 @@ const updateStats = stage => {
       return draws;
     }
     case "CA": {
-      const thirdPlacedTeams = getBestTeamsOfRank(3, 2, "quarterfinals").sort(
-        (a, b) => {
-          const aGroup = a.group.charCodeAt();
-          const bGroup = b.group.charCodeAt();
-
-          return bGroup - aGroup;
-        }
-      );
-
+      getBestTeamsOfRank(5, 0, "quarterfinals");
+      
       const knockouts = [];
 
-      knockouts.push([getTeamFromStandings("A", 1), thirdPlacedTeams[0].team]);
+      knockouts.push([
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("B", 4)
+      ]);
       knockouts.push([
         getTeamFromStandings("A", 2),
-        getTeamFromStandings("B", 2)
+        getTeamFromStandings("B", 3)
       ]);
       knockouts.push([
         getTeamFromStandings("B", 1),
-        getTeamFromStandings("C", 2)
+        getTeamFromStandings("A", 4)
       ]);
-      knockouts.push([getTeamFromStandings("C", 1), thirdPlacedTeams[1].team]);
+      knockouts.push([
+        getTeamFromStandings("B", 2),
+        getTeamFromStandings("A", 3)
+      ]);
 
       return knockouts;
     }
@@ -767,8 +768,6 @@ const updateStats = stage => {
       ]);
 
       return knockouts;
-
-      break;
     }
     case "AR": {
       const matchupIndices = {
@@ -954,10 +953,6 @@ const updateStats = stage => {
 const simResults = [];
 
 const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
-  if (isPenaltyShootout) {
-
-  }
-  
   const [team1Rating, team2Rating] = teams.map(
     team => simRatings[team].rating + (team === location ? 100 : 0)
   );
