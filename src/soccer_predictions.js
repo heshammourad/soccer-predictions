@@ -1016,12 +1016,16 @@ let locationsCountEC = 0;
 const locationsEC = ["ES", "EN", "RO", "DK", "SQ", "EN", "HU", "NL", "DE", "RU", "IT", "AZ", "EN", "EN", "EN"];
 
 const simulateRound = (location, stat) => (acc, teams, idx) => {
+  let matchLocation = location;
+  if (tournament === "EC") {
+    matchLocation = locationsEC[locationsCountEC % 15];
+    locationsCountEC++;
+  }
   const winner = simulateMatch({
-    location: locationsEC[locationsCountEC % 15],
+    location: matchLocation,
     teams,
     isPenaltyShootout: true
   });
-  locationsCountEC++;
 
   if (stat) {
     addStats(null, winner, stat);
