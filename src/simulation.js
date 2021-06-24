@@ -38,7 +38,7 @@ const probability_variables = {
     [0.0730837, 0.0117652],
     [0.0413453, 0.0133053]
   ],
-  [0]: [
+  0: [
     69.3106,
     [10.9719, -0.00557003],
     [17.4901, -0.00360137],
@@ -51,7 +51,7 @@ const probability_variables = {
     [0.0930345, 0.0107572],
     [0.052632, 0.0122973]
   ],
-  [1]: [
+  1: [
     79.0372,
     [17.5037, -0.00752074],
     [27.9023, -0.00555208],
@@ -64,7 +64,7 @@ const probability_variables = {
     [0.14842, 0.00880647],
     [0.0839649, 0.0103465]
   ],
-  [2]: [
+  2: [
     50.5673,
     [30.1781, -0.00979567],
     [48.1063, -0.00782701],
@@ -77,7 +77,7 @@ const probability_variables = {
     [0.255891, 0.00653154],
     [0.144764, 0.00807161]
   ],
-  [3]: [
+  3: [
     22.4111,
     [40.548, -0.0110293],
     [64.6366, -0.0090606],
@@ -90,7 +90,7 @@ const probability_variables = {
     [0.34382, 0.00529795],
     [0.194508, 0.00683803]
   ],
-  [4]: [
+  4: [
     10.8485,
     [60.6322, -0.0127096],
     [96.6524, -0.010741],
@@ -103,7 +103,7 @@ const probability_variables = {
     [0.514121, 0.0036176],
     [0.290851, 0.00515767]
   ],
-  [5]: [
+  5: [
     3.76804,
     [91.865, -0.0144449],
     [146.44, -0.0124762],
@@ -116,7 +116,7 @@ const probability_variables = {
     [0.778954, 0.00188231],
     [0.440675, 0.00342238]
   ],
-  [6]: [
+  6: [
     1.22249,
     [144.173, -0.0163272],
     [229.824, -0.0143586],
@@ -129,7 +129,7 @@ const probability_variables = {
     [5.91358, -0.00188231],
     [0.691597, 0.00154007]
   ],
-  [7]: [
+  7: [
     1,
     [208.465, -0.0178673],
     [332.309, -0.0158986],
@@ -144,7 +144,7 @@ const probability_variables = {
   ]
 };
 
-const getProbabilities = ratingDifference =>
+const getProbabilities = (ratingDifference) =>
   Object.entries(probability_variables).reduce(
     (acc, [goalDifference, [variable1, ...exp]]) => {
       const value = exp.reduce(
@@ -158,7 +158,7 @@ const getProbabilities = ratingDifference =>
     {}
   );
 
-exports.simulateResult = ratingDifference => {
+exports.simulateResult = (ratingDifference) => {
   const probabilities = getProbabilities(ratingDifference);
 
   while (true) {
@@ -167,10 +167,16 @@ exports.simulateResult = ratingDifference => {
     for (let [goalDifference, probability] of Object.entries(probabilities)) {
       total += probability;
       if (random <= total) {
-        return Number.parseInt(goalDifference);
+        return Number.parseInt(goalDifference, 10);
       }
     }
-    console.warn("Repeating result simulation", random, total, probabilities, ratingDifference);
+    console.warn(
+      'Repeating result simulation',
+      random,
+      total,
+      probabilities,
+      ratingDifference
+    );
   }
 };
 
@@ -217,4 +223,38 @@ const weights = {
   WQS: 40
 };
 
-exports.getWeight = tournament => weights[tournament];
+exports.getWeight = (tournament) => weights[tournament];
+
+const goalsScored = [
+  [254, 289, 110, 13],
+  [562, 382, 92, 19],
+  [372, 157, 31],
+  [189, 56, 10],
+  [110, 23],
+  [52, 10],
+  [39, 5],
+  [20, 7]
+];
+
+const totals = [666, 1055, 560, 255, 133, 62, 44, 27];
+
+exports.getLowerScore = (goalDifference) => {
+  try {
+    const occurences = goalsScored[goalDifference];
+    const totalOccurences = totals[goalDifference];
+    const random = Math.random();
+
+    let total = 0;
+    for (let i = 0; i < occurences.length; i += 1) {
+      total += occurences[i];
+      if (random <= total / totalOccurences) {
+        return i;
+      }
+    }
+
+    return 0;
+  } catch (err) {
+    console.log(goalDifference, ' is too large.');
+    return 0;
+  }
+};
