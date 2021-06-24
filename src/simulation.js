@@ -239,22 +239,18 @@ const goalsScored = [
 const totals = [666, 1055, 560, 255, 133, 62, 44, 27];
 
 exports.getLowerScore = (goalDifference) => {
-  try {
-    const occurences = goalsScored[goalDifference];
-    const totalOccurences = totals[goalDifference];
-    const random = Math.random();
+  const absGoalDifference = Math.abs(goalDifference);
+  const occurences = goalsScored[absGoalDifference];
+  const totalOccurences = totals[absGoalDifference];
+  const random = Math.random();
 
-    let total = 0;
-    for (let i = 0; i < occurences.length; i += 1) {
-      total += occurences[i];
-      if (random <= total / totalOccurences) {
-        return i;
-      }
+  let total = 0;
+  for (let i = 0; i < occurences.length; i += 1) {
+    total += occurences[i];
+    if (random <= total / totalOccurences) {
+      return i;
     }
-
-    return 0;
-  } catch (err) {
-    console.log(goalDifference, ' is too large.');
-    return 0;
   }
+
+  return 0;
 };
