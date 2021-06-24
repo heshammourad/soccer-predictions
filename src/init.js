@@ -1,24 +1,24 @@
-const moment = require("moment");
+const moment = require('moment');
 
-const { lineBreak } = require("./configuration");
+const { lineBreak } = require('./configuration');
 const {
   getKnockoutsStageDate,
   dataFiles,
   fetchData,
   readFile
-} = require("./data");
-const { updateStandings } = require("./utils");
+} = require('./data');
+const { updateStandings } = require('./utils');
 
-const loadFixtures = async tournamentCode => {
+const loadFixtures = async (tournamentCode) => {
   const fixturesData = await fetchData(
     `${dataFiles[tournamentCode]}fixtures`,
     `${tournamentCode}/fixtures`
   );
 
-  const fixtures = fixturesData.split("\\n").reduce((acc, fixtureData) => {
-    const fields = fixtureData.split("\\t");
+  const fixtures = fixturesData.split('\\n').reduce((acc, fixtureData) => {
+    const fields = fixtureData.split('\\t');
 
-    const fixtureDate = moment(fields.slice(0, 3).join("-"), "YYYY-MM-DD");
+    const fixtureDate = moment(fields.slice(0, 3).join('-'), 'YYYY-MM-DD');
 
     const fixtureTournament = fields[5];
     if (
@@ -36,11 +36,12 @@ const loadFixtures = async tournamentCode => {
   return fixtures;
 };
 
-const loadStandings = async tournamentCode => {
+const loadStandings = async (tournamentCode) => {
   const groups = JSON.parse(readFile(`${tournamentCode}/groups`));
   const standings = Object.entries(groups).reduce((acc, [group, teams]) => {
     const groupTeams = teams.reduce((tAcc, team) => {
       tAcc[team] = {
+        goalsFor: 0,
         goalDifference: 0,
         group,
         points: 0
@@ -50,7 +51,7 @@ const loadStandings = async tournamentCode => {
     return { ...acc, ...groupTeams };
   }, {});
 
-  if (tournamentCode === "WC") {
+  if (tournamentCode === 'WC') {
     return standings;
   }
 
@@ -59,12 +60,12 @@ const loadStandings = async tournamentCode => {
     `${tournamentCode}/results`
   );
 
-  const results = resultsData.split("\\n").reduce((acc, line) => {
-    const fields = line.split("\\t");
+  const results = resultsData.split('\\n').reduce((acc, line) => {
+    const fields = line.split('\\t');
 
     const resultTournament = fields[7];
     if (resultTournament === tournamentCode) {
-      const date = moment(fields.slice(0, 3).join(""), "YYYY-MM-DD");
+      const date = moment(fields.slice(0, 3).join(''), 'YYYY-MM-DD');
       const team1 = fields[3];
       const team2 = fields[4];
       const score1 = fields[5];
@@ -73,8 +74,8 @@ const loadStandings = async tournamentCode => {
       const goalDifference = score1 - score2;
 
       if (date.isBefore(getKnockoutsStageDate(tournamentCode))) {
-        updateStandings(standings, team1, goalDifference);
-        updateStandings(standings, team2, -goalDifference);
+        updateStandings(standings, team1, score1, score2);
+        updateStandings(standings, team2, score2, score1);
       }
 
       acc.push({ date, team1, team2, goalDifference });
@@ -88,9 +89,9 @@ const loadStandings = async tournamentCode => {
 const loadTeams = async () => {
   const ratings = await fetchData(dataFiles.ratings, dataFiles.teamRatings);
 
-  const ratingsData = ratings.split("\\n");
+  const ratingsData = ratings.split('\\n');
   const teamRatings = ratingsData.reduce((acc, teamData) => {
-    const teamDataFields = teamData.split("\\t");
+    const teamDataFields = teamData.split('\\t');
 
     const code = teamDataFields[2];
     const rating = parseInt(teamDataFields[3], 10);
@@ -99,12 +100,10 @@ const loadTeams = async () => {
     return acc;
   }, {});
 
-  const teamsData = readFile(dataFiles.teamNames)
-    .toString()
-    .split(lineBreak);
+  const teamsData = readFile(dataFiles.teamNames).toString().split(lineBreak);
   const teamNames = teamsData.reduce((acc, teamData) => {
     if (teamData) {
-      const [code, name] = teamData.split(",");
+      const [code, name] = teamData.split(',');
       acc[code] = name;
     }
     return acc;
@@ -119,7 +118,7 @@ const loadTeams = async () => {
   }, {});
 };
 
-exports.init = async tournamentCode => {
+exports.init = async (tournamentCode) => {
   const [fixtures, { results, standings }, teamRatings] = await Promise.all([
     loadFixtures(tournamentCode),
     loadStandings(tournamentCode),
@@ -127,7 +126,7 @@ exports.init = async tournamentCode => {
   ]);
 
   let nationsLeagueStandings;
-  if (tournamentCode === "EQ") {
+  if (tournamentCode === 'EQ') {
     nationsLeagueStandings = JSON.parse(
       readFile(dataFiles.nationsLeagueStandings)
     );

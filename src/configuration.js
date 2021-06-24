@@ -1,8 +1,8 @@
 module.exports = {
-  cacheFileDuration: [1, "day"],
-  dataPath: "./data/",
+  cacheFileDuration: [1, 'day'],
+  dataPath: './data/',
   forceReload: true,
   lineBreak: '\r\n',
   simulations: 10000,
-  tournament: "CA"
+  tournament: 'EC'
 };
