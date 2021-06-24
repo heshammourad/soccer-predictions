@@ -238,10 +238,9 @@ const goalsScored = [
 
 const totals = [666, 1055, 560, 255, 133, 62, 44, 27];
 
-exports.getLowerScore = (goalDifference) => {
-  const absGoalDifference = Math.abs(goalDifference);
-  const occurences = goalsScored[absGoalDifference];
-  const totalOccurences = totals[absGoalDifference];
+exports.getLowerScore = (goalMargin) => {
+  const occurences = goalsScored[goalMargin];
+  const totalOccurences = totals[goalMargin];
   const random = Math.random();
 
   let total = 0;

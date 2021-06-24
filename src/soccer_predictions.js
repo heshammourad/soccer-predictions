@@ -837,8 +837,9 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
       goalDifference: result
     });
 
-    const lowerScore = getLowerScore(result);
-    const higherScore = result - lowerScore;
+    const margin = Math.abs(result);
+    const lowerScore = getLowerScore(margin);
+    const higherScore = margin + lowerScore;
 
     let favoriteGoals, underdogGoals;
     if (result < 0) {
