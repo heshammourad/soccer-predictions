@@ -1,4 +1,5 @@
 const { simulations, tournament } = require('./configuration');
+const { getKnockoutsStageDate } = require('./data');
 const { init } = require('./init');
 const { getLowerScore, getWeight, simulateResult } = require('./simulation');
 const { updateStandings } = require('./utils');
@@ -912,17 +913,36 @@ const locationsEC = [
   'EN'
 ];
 
+let knockoutResults = [];
+
+const findActualWinner = ([team1, team2]) => {
+  const actualMatch = knockoutResults.find(
+    (match) =>
+      (match.team1 === team1 && match.team2 === team2) ||
+      (match.team1 === team2 && match.team2 === team1)
+  );
+  if (actualMatch) {
+    return actualMatch.goalDifference > 0
+      ? actualMatch.team1
+      : actualMatch.team2;
+  }
+  return null;
+};
+
 const simulateRound = (location, stat) => (acc, teams, idx) => {
   let matchLocation = location;
   if (tournament === 'EC') {
     matchLocation = locationsEC[locationsCountEC % 15];
     locationsCountEC++;
   }
-  const winner = simulateMatch({
-    location: matchLocation,
-    teams,
-    isPenaltyShootout: true
-  });
+
+  const winner =
+    findActualWinner(teams) ||
+    simulateMatch({
+      location: matchLocation,
+      teams,
+      isPenaltyShootout: true
+    });
 
   if (stat) {
     addStats(null, winner, stat);
@@ -960,6 +980,15 @@ exports.runSimulation = async () => {
     standings,
     teamRatings
   } = await init(tournament));
+
+  knockoutResults = results
+    .filter((match) =>
+      match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
+    )
+    .map((match) => {
+      // TODO: Handle penalty shootouts by asking for results
+      return match;
+    });
 
   stats = Object.entries(standings).reduce((acc, [team, { group }]) => {
     if (!acc[group]) {
