@@ -6,6 +6,7 @@ const { updateStandings } = require('./utils');
 
 const locations = {
   AR: 'EG',
+  ARC: 'QA',
   CA: 'BR',
   CCH: 'US',
   CLA: 'XX',
@@ -130,6 +131,14 @@ const evaluatedStats = {
     final: 0,
     champions: 0
   },
+  ARC: {
+    first: 0,
+    second: 0,
+    quarterfinals: 0,
+    semifinals: 0,
+    final: 0,
+    champions: 0,
+  },
   CCH: {
     first: 0,
     second: 0,
@@ -217,6 +226,7 @@ const sortStats = (t) => ([teamA, totalsA], [teamB, totalsB]) => {
         'third'
       );
       break;
+    case 'ARC':
     case 'CCH':
       order.push(
         'champions',
@@ -340,6 +350,30 @@ const updateStats = (stage) => {
   sortStandings();
 
   switch (stage) {
+    case 'ARC': {
+      const knockouts = [];
+
+      getBestTeamsOfRank(3, 0, 'quarterfinals');
+
+      knockouts.push([
+        getTeamFromStandings('B', 1),
+        getTeamFromStandings('A', 2)
+      ]);
+      knockouts.push([
+        getTeamFromStandings('D', 1),
+        getTeamFromStandings('C', 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings('A', 1),
+        getTeamFromStandings('B', 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings('C', 1),
+        getTeamFromStandings('D', 2),
+      ]);
+
+      return knockouts;
+    }
     case 'EQ': {
       const qualifiedTeams = [];
 
@@ -1053,6 +1087,7 @@ exports.runSimulation = async () => {
           'champions'
         ]);
         break;
+      case 'ARC':
       case 'CCH':
         simulateKnockouts(playoffs, ['semifinals', 'final', 'champions']);
         break;

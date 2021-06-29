@@ -183,6 +183,7 @@ exports.simulateResult = (ratingDifference) => {
 const weights = {
   AC: 50,
   AR: 50,
+  ARC: 40,
   ASC: 40,
   BLC: 30,
   CA: 50,
