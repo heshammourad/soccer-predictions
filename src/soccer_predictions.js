@@ -2,7 +2,7 @@ const { simulations, tournament } = require('./configuration');
 const { getKnockoutsStageDate } = require('./data');
 const { init } = require('./init');
 const { getLowerScore, getWeight, simulateResult } = require('./simulation');
-const { updateStandings } = require('./utils');
+const { askQuestion, updateStandings } = require('./utils');
 
 const locations = {
   AR: 'EG',
@@ -137,7 +137,7 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0,
+    champions: 0
   },
   CCH: {
     first: 0,
@@ -361,15 +361,15 @@ const updateStats = (stage) => {
       ]);
       knockouts.push([
         getTeamFromStandings('D', 1),
-        getTeamFromStandings('C', 2),
+        getTeamFromStandings('C', 2)
       ]);
       knockouts.push([
         getTeamFromStandings('A', 1),
-        getTeamFromStandings('B', 2),
+        getTeamFromStandings('B', 2)
       ]);
       knockouts.push([
         getTeamFromStandings('C', 1),
-        getTeamFromStandings('D', 2),
+        getTeamFromStandings('D', 2)
       ]);
 
       return knockouts;
@@ -1015,14 +1015,51 @@ exports.runSimulation = async () => {
     teamRatings
   } = await init(tournament));
 
-  knockoutResults = results
-    .filter((match) =>
-      match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
-    )
-    .map((match) => {
-      // TODO: Handle penalty shootouts by asking for results
-      return match;
-    });
+  knockoutResults = results.filter((match) =>
+    match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
+  );
+  for (let i = 0; i < knockoutResults.length; i += 1) {
+    const { date, team1, team2, goalDifference } = knockoutResults[i];
+    if (!goalDifference) {
+      let newGoalDifference;
+
+      const searchBase = [
+        ...fixtures,
+        ...knockoutResults.map((match) => ({
+          teams: [match.team1, match.team2],
+          date: match.date
+        }))
+      ];
+
+      const futureFixture = searchBase.find(
+        (fixture) =>
+          fixture.date.isAfter(date) &&
+          (fixture.teams.includes(team1) || fixture.teams.includes(team2))
+      );
+      if (futureFixture) {
+        if (futureFixture.teams.includes(team1)) {
+          newGoalDifference = 1;
+        } else {
+          newGoalDifference = -1;
+        }
+      } else {
+        const winner = await askQuestion(
+          `Enter the winner:\n1) ${team1}\n2) ${team2}\n`
+        );
+        switch (winner) {
+          case '1':
+            newGoalDifference = 1;
+            break;
+          case '2':
+            newGoalDifference = -1;
+            break;
+          default:
+            throw new Error('Invalid input');
+        }
+      }
+      knockoutResults[i].goalDifference = newGoalDifference;
+    }
+  }
 
   stats = Object.entries(standings).reduce((acc, [team, { group }]) => {
     if (!acc[group]) {
@@ -1039,9 +1076,11 @@ exports.runSimulation = async () => {
     resetRatings();
     resetStandings();
 
-    fixtures.forEach((fixture) => {
-      simulateMatch({ ...fixture });
-    });
+    fixtures
+      .filter(({ isKnockout }) => !isKnockout)
+      .forEach((fixture) => {
+        simulateMatch({ ...fixture });
+      });
 
     const playoffs = updateStats(tournament);
 

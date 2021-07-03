@@ -18,16 +18,16 @@ const loadFixtures = async (tournamentCode) => {
   const fixtures = fixturesData.split('\\n').reduce((acc, fixtureData) => {
     const fields = fixtureData.split('\\t');
 
-    const fixtureDate = moment(fields.slice(0, 3).join('-'), 'YYYY-MM-DD');
-
     const fixtureTournament = fields[5];
-    if (
-      fixtureTournament === tournamentCode &&
-      fixtureDate.isBefore(getKnockoutsStageDate(tournamentCode))
-    ) {
+    if (fixtureTournament === tournamentCode) {
+      const fixtureDate = moment(fields.slice(0, 3).join('-'), 'YYYY-MM-DD');
       acc.push({
         teams: [fields[3], fields[4]],
-        location: fields[6]
+        location: fields[6],
+        date: fixtureDate,
+        isKnockout: fixtureDate.isSameOrAfter(
+          getKnockoutsStageDate(tournamentCode)
+        )
       });
     }
     return acc;
