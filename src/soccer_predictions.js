@@ -16,6 +16,7 @@ const locations = {
 
 let fixtures;
 let nationsLeagueStandings;
+let results;
 let standings;
 let teamRatings;
 
@@ -1029,15 +1030,17 @@ exports.runSimulation = async () => {
           teams: [match.team1, match.team2],
           date: match.date
         }))
-      ];
+      ].filter((fixture) => fixture.date.isAfter(date));
 
-      const futureFixture = searchBase.find(
-        (fixture) =>
-          fixture.date.isAfter(date) &&
-          (fixture.teams.includes(team1) || fixture.teams.includes(team2))
+      const fixture1 = searchBase.find((fixture) =>
+        fixture.teams.includes(team1)
       );
-      if (futureFixture) {
-        if (futureFixture.teams.includes(team1)) {
+      const fixture2 = searchBase.find((fixture) =>
+        fixture.teams.includes(team2)
+      );
+
+      if (!fixture1 !== !fixture2) {
+        if (fixture1) {
           newGoalDifference = 1;
         } else {
           newGoalDifference = -1;
