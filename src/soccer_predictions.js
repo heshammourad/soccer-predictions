@@ -747,20 +747,20 @@ const updateStats = (stage) => {
       getBestTeamsOfRank(3, 0, 'quarterfinals');
 
       knockouts.push([
-        getTeamFromStandings('B', 1),
+        getTeamFromStandings('D', 1),
         getTeamFromStandings('A', 2)
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        getTeamFromStandings('B', 2)
+        getTeamFromStandings('B', 1),
+        getTeamFromStandings('C', 2)
       ]);
       knockouts.push([
-        getTeamFromStandings('C', 1),
+        getTeamFromStandings('A', 1),
         getTeamFromStandings('D', 2)
       ]);
       knockouts.push([
-        getTeamFromStandings('D', 1),
-        getTeamFromStandings('C', 2)
+        getTeamFromStandings('C', 1),
+        getTeamFromStandings('B', 2)
       ]);
 
       return knockouts;

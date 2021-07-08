@@ -8,7 +8,7 @@ const dataFiles = {
   AR: '2019_African_Nations_Cup_',
   ARC: '2021_Arab_Nations_Cup_',
   CA: '2021_Copa_America_',
-  CCH: '2019_CONCACAF_Championship_',
+  CCH: '2021_CONCACAF_Championship_',
   CLA: '2019_CONCACAF_Nations_League_A_',
   CLB: '2019_CONCACAF_Nations_League_B_',
   CLC: '2019_CONCACAF_Nations_League_C_',
@@ -24,7 +24,7 @@ const knockoutStageDates = {
   AR: moment('2019-07-05'),
   ARC: moment('2021-12-10'),
   CA: moment('2021-07-02'),
-  CCH: moment('2019-06-29'),
+  CCH: moment('2021-07-24'),
   EC: moment('2021-06-26')
 };
 
