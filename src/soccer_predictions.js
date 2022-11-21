@@ -11,7 +11,7 @@ const locations = {
   CCH: 'US',
   CLA: 'XX',
   EC: 'EN',
-  WC: 'RU'
+  WC: 'QA'
 };
 
 let fixtures;
@@ -247,6 +247,8 @@ const sortStats = (t) => ([teamA, totalsA], [teamB, totalsB]) => {
     case 'CLC':
       order.push('promoted');
       break;
+    case 'WC':
+      order.push('champions', 'final', 'semifinals', 'quaterfinals', 'roundOf16', 'first', 'second');
     default:
       break;
   }
