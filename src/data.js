@@ -13,7 +13,7 @@ const dataFiles = {
   CLB: '2019_CONCACAF_Nations_League_B_',
   CLC: '2019_CONCACAF_Nations_League_C_',
   EC: '2021_European_Championship_',
-  EQ: '2020_European_Championship_qualifying_',
+  EQ: '2024_European_Championship_qualifying_',
   WC: '2022_World_Cup_',
   nationsLeagueStandings: 'EQ/nations_league_standings',
   ratings: 'World',

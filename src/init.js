@@ -25,7 +25,7 @@ const loadFixtures = async (tournamentCode) => {
         teams: [fields[3], fields[4]],
         location: fields[6],
         date: fixtureDate,
-        isKnockout: fixtureDate.isSameOrAfter(
+        isKnockout: tournamentCode !== 'EQ' && fixtureDate.isSameOrAfter(
           getKnockoutsStageDate(tournamentCode)
         )
       });

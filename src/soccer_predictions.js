@@ -1,3 +1,5 @@
+const partition = require('lodash.partition');
+const sampleSize = require('lodash.samplesize');
 const { simulations, tournament } = require('./configuration');
 const { getKnockoutsStageDate } = require('./data');
 const { init } = require('./init');
@@ -108,6 +110,7 @@ const getTeamFromStandings = (group, rank) =>
 
 const evaluatedStats = {
   EQ: {
+    totalQualify: 0,
     qualifyFromGroup: 0,
     qualifyToPlayoffs: 0,
     qualifyFromPlayoffs: 0
@@ -186,16 +189,8 @@ const sortStats = (t) => ([teamA, totalsA], [teamB, totalsB]) => {
 
   switch (t) {
     case 'EQ': {
-      const getTotalQualify = (team) =>
-        team.qualifyFromGroup + team.qualifyFromPlayoffs;
-
-      const aTotal = getTotalQualify(totalsA);
-      const bTotal = getTotalQualify(totalsB);
-      if (aTotal !== bTotal) {
-        return bTotal - aTotal;
-      }
-
       order.push(
+        'totalQualify',
         'qualifyFromGroup',
         'qualifyFromPlayoffs',
         'qualifyToPlayoffs'
@@ -381,13 +376,13 @@ const updateStats = (stage) => {
       const qualifiedTeams = [];
 
       Object.entries(simStandings).forEach(([group, [qual1, qual2]]) => {
-        const stat = 'qualifyFromGroup';
+        const stats = ['totalQualify', 'qualifyFromGroup'];
 
         const q1 = qual1.team;
         const q2 = qual2.team;
 
-        addStats(group, q1, stat);
-        addStats(group, q2, stat);
+        addStats(group, q1, ...stats);
+        addStats(group, q2, ...stats);
 
         qualifiedTeams.push(q1, q2);
       });
@@ -405,175 +400,102 @@ const updateStats = (stage) => {
           rest: [...leagueTeams.rest, ...teams]
         };
       };
+      
+      const leagues = ["C", "B", "A"];
+      const selectedTeamsFromLeagues = leagues.reduce((acc, cur) => {
+        acc[cur] = { groupWinnerSelected: false, teams: [] };
+        return acc;
+      }, {});
 
-      const paths = Object.entries(nationsLeagueStandings).reduce(
-        (acc, [league, { groupWinners, rest }], idx, src) => {
-          const selectedGroupWinners = groupWinners.filter(
-            (gw) => !isQualified(gw)
-          );
-
-          const groupWinnerCount = selectedGroupWinners.length;
-
-          const selectedLeagueTeams = rest.reduce((tAcc, team) => {
-            if (tAcc.length + groupWinnerCount === 4 || isQualified(team)) {
-              return tAcc;
-            }
-
-            tAcc.push(team);
-            return tAcc;
-          }, []);
-
-          playoffTeams.push(...selectedGroupWinners, ...selectedLeagueTeams);
-
-          let teamsLeftToPick =
-            4 - (groupWinnerCount + selectedLeagueTeams.length);
-
-          if (groupWinnerCount && teamsLeftToPick) {
-            for (let i = idx - 1; i >= 0; i--) {
-              const [league, { rest }] = src[i];
-
-              const selectedRemainingTeams = rest
-                .filter((team) => !isQualified(team))
-                .slice(0, teamsLeftToPick);
-
-              addTeamsToLeague(acc, league, selectedRemainingTeams);
-              playoffTeams.push(...selectedRemainingTeams);
-
-              teamsLeftToPick -= selectedRemainingTeams.length;
-              if (!teamsLeftToPick) {
-                break;
-              }
-            }
+      leagues.forEach((league) => {
+        const { groupWinners, rest } = nationsLeagueStandings[league];
+        const selectedTeamsFromLeague = selectedTeamsFromLeagues[league];
+        groupWinners.forEach((groupWinner) => {
+          if (!isQualified(groupWinner)) {
+            playoffTeams.push(groupWinner);
+            selectedTeamsFromLeague.teams.push(groupWinner);
+            selectedTeamsFromLeague.groupWinnerSelected = true;
           }
-
-          acc[league] = {
-            groupWinners: selectedGroupWinners,
-            rest: selectedLeagueTeams
-          };
-          return acc;
-        },
-        {}
-      );
-
-      let teamsLeftToPick = 16 - playoffTeams.length;
-
-      if (teamsLeftToPick) {
-        for (let [league, { rest }] of [
-          ...Object.entries(nationsLeagueStandings)
-        ].reverse()) {
-          const selectedRemainingTeams = rest
-            .filter((team) => !isQualified(team))
-            .slice(0, teamsLeftToPick);
-
-          addTeamsToLeague(paths, league, selectedRemainingTeams);
-          playoffTeams.push(...selectedRemainingTeams);
-
-          teamsLeftToPick -= selectedRemainingTeams.length;
-          if (!teamsLeftToPick) {
-            break;
-          }
-        }
-      }
-
-      Object.values(paths).forEach(({ groupWinners, rest }) => {
-        const teams = [...groupWinners, ...rest];
-        teams.forEach((team) => {
-          addStats(null, team, 'qualifyToPlayoffs');
         });
+        for (let i = 0; i < rest.length && selectedTeamsFromLeague.teams.length < 4; i += 1) {
+          const team = rest[i];
+          if (isQualified(team)) {
+            continue;
+          }
+          playoffTeams.push(team);
+          selectedTeamsFromLeague.teams.push(team);
+        }
       });
 
-      const selectedTeams = [];
-
-      const getPot = (teams) =>
-        teams.filter((team) => !selectedTeams.includes(team));
-
-      const draws = Object.entries(paths).reduce(
-        (acc, [league, { groupWinners, rest }], idx, src) => {
-          if (acc[league]) {
-            return acc;
+      const bestGroupWinnerD = nationsLeagueStandings.D.groupWinners[0];
+      const transitionLetter = (letter, increment = true) => String.fromCharCode(letter.charCodeAt(0) + (increment ? 1 : -1));
+      leagues.forEach((league) => {
+        const { groupWinnerSelected, teams } = selectedTeamsFromLeagues[league];
+        let teamsToSelect = 4 - teams.length;
+        while (teamsToSelect > 0) {
+          if (!isQualified(bestGroupWinnerD)) {
+            playoffTeams.push(bestGroupWinnerD);
+            selectedTeamsFromLeagues.D = { teams: [bestGroupWinnerD] };
+            teamsToSelect--;
           }
-
-          const drawTeams = [...groupWinners];
-
-          if (!drawTeams.length) {
-            const teamsAvailable = src.reduce(
-              (tAcc, cur, tIdx) => {
-                const r = getPot(cur[1].rest);
-                if (tIdx > idx) {
-                  tAcc[1].push(...getPot(cur[1].groupWinners), ...r);
-                } else {
-                  tAcc[0].push(...r);
-                }
-                return tAcc;
-              },
-              [[], []]
-            );
-
-            if (teamsAvailable[0].length < 4) {
-              const allTeams = [].concat(...teamsAvailable).sort(sortFunction);
-              const draw1 = [];
-              const draw2 = [];
-
-              while (allTeams.length) {
-                const pot = allTeams.splice(0, 2);
-                if (Math.random() > 0.5) {
-                  pot.reverse();
-                }
-                draw1.push(pot.pop());
-                draw2.push(pot.pop());
-              }
-
-              acc[league] = draw1;
-              acc[src[idx + 1][0]] = draw2;
-              return acc;
+          for (let group = groupWinnerSelected ? transitionLetter(league) : 'A'; group <= 'D'; group = transitionLetter(group)) {
+            const availableTeams = nationsLeagueStandings[group].rest.filter((team) => !isQualified(team));
+            if (availableTeams.length) {
+              const nextTeam = availableTeams[0];
+              playoffTeams.push(nextTeam);
+              selectedTeamsFromLeagues[group].teams.push(nextTeam);
+              teamsToSelect--;
+              break;
             }
           }
+        }
+      });
 
-          const teamsLeftToDraw = () => 4 - drawTeams.length;
-          if (teamsLeftToDraw) {
-            let pot = getPot(rest);
-            const potTeamCount = pot.length;
-            if (teamsLeftToDraw() >= potTeamCount) {
-              drawTeams.push(...pot);
-              selectedTeams.push(...pot);
-            } else {
-              while (teamsLeftToDraw()) {
-                const draw = drawTeam(pot);
+      playoffTeams.forEach((team) => {
+        addStats(null, team, 'qualifyToPlayoffs');
+      });
 
-                drawTeams.push(draw);
-                selectedTeams.push(draw);
-
-                pot = getPot(pot);
-              }
-            }
+      const drawnTeams = [];
+      const draws = leagues.reduce((acc, cur) => {
+        const { teams } = selectedTeamsFromLeagues[cur];
+        if (teams.length === 4) {
+          acc[cur] = teams;
+          drawnTeams.push(...teams);
+        } else if (teams.length > 4) {
+          const pathTeams = [];
+          if (Object.keys(selectedTeamsFromLeagues).some((league) => league < cur && selectedTeamsFromLeagues[league].teams.length)) {
+            const [groupWinners, rest] = partition(teams, (team) => nationsLeagueStandings[cur].groupWinners.includes(team));
+            pathTeams.push(...groupWinners);
+            
+            const pot = rest.filter((team) => !drawnTeams.includes(team));
+            const restTeams = sampleSize(pot, 4 - groupWinners.length);
+            pathTeams.push(...restTeams);
+          } else {
+            pathTeams.push(...sampleSize(teams, 4));
           }
-
-          for (let i = idx - 1; teamsLeftToDraw() && i >= 0; i--) {
-            const teams = src[i][1].rest;
-            let pot = getPot(teams);
-
-            while (teamsLeftToDraw() && pot.length) {
-              const draw = drawTeam(pot);
-
-              drawTeams.push(draw);
-              selectedTeams.push(draw);
-              pot = getPot(teams);
+          pathTeams.sort((a, b) => teams.indexOf(a) - teams.indexOf(b));
+          acc[cur] = pathTeams;
+          drawnTeams.push(...pathTeams);
+        } else {
+          const findLeague = (team) => Object.keys(selectedTeamsFromLeagues).find((league) => selectedTeamsFromLeagues[league].teams.includes(team));
+          const pathTeams = playoffTeams.filter((team) => !drawnTeams.includes(team));
+          pathTeams.sort((a, b) => {
+            const aLeague = findLeague(a);
+            const bLeague = findLeague(b);
+            if (aLeague < bLeague) {
+              return -1;
             }
-          }
-
-          drawTeams.sort((a, b) => {
-            const aIndex = getTeamRank(a);
-            const bIndex = getTeamRank(b);
-
-            return aIndex - bIndex;
+            if (bLeague < aLeague) {
+              return 1;
+            }
+            const { teams } = selectedTeamsFromLeagues[aLeague];
+            return teams.indexOf(a) - teams.indexOf(b);
           });
-
-          acc[league] = drawTeams;
-
-          return acc;
-        },
-        {}
-      );
+          acc[cur] = pathTeams;
+          drawnTeams.push(...pathTeams);
+        }
+        return acc;
+      }, {});
 
       return draws;
     }
@@ -1018,9 +940,9 @@ exports.runSimulation = async () => {
     teamRatings
   } = await init(tournament));
 
-  knockoutResults = results.filter((match) =>
-    match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
-  );
+  // knockoutResults = results.filter((match) =>
+  //   match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
+  // );
   for (let i = 0; i < knockoutResults.length; i += 1) {
     const { date, team1, team2, goalDifference } = knockoutResults[i];
     if (!goalDifference) {
@@ -1114,7 +1036,7 @@ exports.runSimulation = async () => {
             isPenaltyShootout: true
           });
 
-          addStats(null, playoffWinner, 'qualifyFromPlayoffs');
+          addStats(null, playoffWinner, 'totalQualify', 'qualifyFromPlayoffs');
         });
         break;
       }

@@ -9,7 +9,9 @@
   "author": "Hesham Mourad",
   "license": "ISC",
   "dependencies": {
-    "lodash.groupby": "^4.6.0"
+    "lodash.groupby": "^4.6.0",
+    "lodash.partition": "^4.6.0",
+    "lodash.samplesize": "^4.2.0"
   },
   "devDependencies": {
     "axios": "^0.21.4",
