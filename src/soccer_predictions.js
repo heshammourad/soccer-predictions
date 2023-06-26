@@ -1,19 +1,20 @@
-const partition = require('lodash.partition');
-const sampleSize = require('lodash.samplesize');
-const { simulations, tournament } = require('./configuration');
-const { getKnockoutsStageDate } = require('./data');
-const { init } = require('./init');
-const { getLowerScore, getWeight, simulateResult } = require('./simulation');
-const { askQuestion, updateStandings } = require('./utils');
+const partition = require("lodash.partition");
+const sampleSize = require("lodash.samplesize");
+const { simulations, tournament } = require("./configuration");
+const { getKnockoutsStageDate } = require("./data");
+const { init } = require("./init");
+const { getLowerScore, getWeight, simulateResult } = require("./simulation");
+const { askQuestion, updateStandings } = require("./utils");
 
 const locations = {
-  AR: 'EG',
-  ARC: 'QA',
-  CA: 'BR',
-  CCH: 'US',
-  CLA: 'XX',
-  EC: 'EN',
-  WC: 'QA'
+  AC: "QA",
+  AR: "EG",
+  ARC: "QA",
+  CA: "BR",
+  CCH: "US",
+  CLA: "XX",
+  EC: "EN",
+  WC: "QA",
 };
 
 let fixtures;
@@ -27,7 +28,7 @@ let simRatings;
 const resetRatings = () => {
   simRatings = Object.entries(teamRatings).reduce((acc, [team, info]) => {
     acc[team] = {
-      ...info
+      ...info,
     };
     return acc;
   }, {});
@@ -54,20 +55,13 @@ let simStandings;
 const resetStandings = () => {
   simStandings = Object.entries(standings).reduce((acc, [team, teamInfo]) => {
     acc[team] = {
-      ...teamInfo
+      ...teamInfo,
     };
     return acc;
   }, {});
 };
 
 const sortFunction = (a, b) => {
-  // HARD-CODED FOR EC2021
-  if (a.team === 'DE' && b.team === 'PT') {
-    return -1;
-  } else if (a.team === 'PT' && b.team === 'DE') {
-    return 1;
-  }
-
   if (a.points !== b.points) {
     return b.points - a.points;
   }
@@ -88,7 +82,7 @@ const convertStandingsToArray = (standingsToConvert) => {
       }
       acc[group].push({
         team,
-        ...values
+        ...values,
       });
       return acc;
     },
@@ -109,11 +103,21 @@ const getTeamFromStandings = (group, rank) =>
   simStandings[group][rank - 1].team;
 
 const evaluatedStats = {
+  AC: {
+    first: 0,
+    second: 0,
+    third: 0,
+    roundOf16: 0,
+    quarterfinals: 0,
+    semifinals: 0,
+    final: 0,
+    champions: 0,
+  },
   EQ: {
     totalQualify: 0,
     qualifyFromGroup: 0,
     qualifyToPlayoffs: 0,
-    qualifyFromPlayoffs: 0
+    qualifyFromPlayoffs: 0,
   },
   CA: {
     first: 0,
@@ -123,7 +127,7 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0
+    champions: 0,
   },
   AR: {
     first: 0,
@@ -133,7 +137,7 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0
+    champions: 0,
   },
   ARC: {
     first: 0,
@@ -141,7 +145,7 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0
+    champions: 0,
   },
   CCH: {
     first: 0,
@@ -149,19 +153,19 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0
+    champions: 0,
   },
   CLA: {
     finals: 0,
     champions: 0,
-    relegated: 0
+    relegated: 0,
   },
   CLB: {
     promoted: 0,
-    relegated: 0
+    relegated: 0,
   },
   CLC: {
-    promoted: 0
+    promoted: 0,
   },
   EC: {
     first: 0,
@@ -171,7 +175,7 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0
+    champions: 0,
   },
   WC: {
     first: 0,
@@ -180,88 +184,99 @@ const evaluatedStats = {
     quarterfinals: 0,
     semifinals: 0,
     final: 0,
-    champions: 0
-  }
+    champions: 0,
+  },
 };
 
-const sortStats = (t) => ([teamA, totalsA], [teamB, totalsB]) => {
-  const order = [];
+const sortStats =
+  (t) =>
+    ([teamA, totalsA], [teamB, totalsB]) => {
+      const order = [];
 
-  switch (t) {
-    case 'EQ': {
-      order.push(
-        'totalQualify',
-        'qualifyFromGroup',
-        'qualifyFromPlayoffs',
-        'qualifyToPlayoffs'
-      );
-      break;
-    }
-    case 'CA':
-      order.push(
-        'champions',
-        'final',
-        'semifinals',
-        'quarterfinals',
-        'first',
-        'second',
-        'third',
-        'fourth'
-      );
-      break;
-    case 'AR':
-    case 'EC':
-      order.push(
-        'champions',
-        'final',
-        'semifinals',
-        'quarterfinals',
-        'roundOf16',
-        'first',
-        'second',
-        'third'
-      );
-      break;
-    case 'ARC':
-    case 'CCH':
-      order.push(
-        'champions',
-        'final',
-        'semifinals',
-        'quarterfinals',
-        'first',
-        'second'
-      );
-      break;
-    case 'CLA':
-      order.push('champions', 'finals', '!relegated');
-      break;
-    case 'CLB':
-      order.push('promoted', '!relegated');
-      break;
-    case 'CLC':
-      order.push('promoted');
-      break;
-    case 'WC':
-      order.push('champions', 'final', 'semifinals', 'quaterfinals', 'roundOf16', 'first', 'second');
-    default:
-      break;
-  }
-
-  for (let stat of order) {
-    if (stat.startsWith('!')) {
-      const s = stat.substr(1);
-      if (totalsA[s] !== totalsB[s]) {
-        return totalsA[s] - totalsB[s];
+      switch (t) {
+        case "EQ": {
+          order.push(
+            "totalQualify",
+            "qualifyFromGroup",
+            "qualifyFromPlayoffs",
+            "qualifyToPlayoffs"
+          );
+          break;
+        }
+        case "CA":
+          order.push(
+            "champions",
+            "final",
+            "semifinals",
+            "quarterfinals",
+            "first",
+            "second",
+            "third",
+            "fourth"
+          );
+          break;
+        case "AC":
+        case "AR":
+        case "EC":
+          order.push(
+            "champions",
+            "final",
+            "semifinals",
+            "quarterfinals",
+            "roundOf16",
+            "first",
+            "second",
+            "third"
+          );
+          break;
+        case "ARC":
+        case "CCH":
+          order.push(
+            "champions",
+            "final",
+            "semifinals",
+            "quarterfinals",
+            "first",
+            "second"
+          );
+          break;
+        case "CLA":
+          order.push("champions", "finals", "!relegated");
+          break;
+        case "CLB":
+          order.push("promoted", "!relegated");
+          break;
+        case "CLC":
+          order.push("promoted");
+          break;
+        case "WC":
+          order.push(
+            "champions",
+            "final",
+            "semifinals",
+            "quaterfinals",
+            "roundOf16",
+            "first",
+            "second"
+          );
+        default:
+          break;
       }
-    }
-    if (totalsA[stat] !== totalsB[stat]) {
-      return totalsB[stat] - totalsA[stat];
-    }
-  }
 
-  return teamA > teamB ? 1 : -1;
-};
+      for (let stat of order) {
+        if (stat.startsWith("!")) {
+          const s = stat.substr(1);
+          if (totalsA[s] !== totalsB[s]) {
+            return totalsA[s] - totalsB[s];
+          }
+        }
+        if (totalsA[stat] !== totalsB[stat]) {
+          return totalsB[stat] - totalsA[stat];
+        }
+      }
+
+      return teamA > teamB ? 1 : -1;
+    };
 
 let stats;
 
@@ -282,14 +297,14 @@ const printStats = () => {
           vAcc += `,${percentage}%`;
 
           return vAcc;
-        }, '');
+        }, "");
 
         tAcc += `${valuePrint}\n`;
 
         return tAcc;
-      }, '');
+      }, "");
     return `${acc}`;
-  }, '');
+  }, "");
 
   console.log(statPrint);
 };
@@ -311,7 +326,7 @@ const addStats = (group, team, ...statList) => {
   }
 };
 
-const rankStatNames = ['first', 'second', 'third', 'fourth'];
+const rankStatNames = ["first", "second", "third", "fourth"];
 
 const getBestTeamsOfRank = (rank, teamCount, automaticStat) => {
   const rankIndex = rank - 1;
@@ -326,7 +341,7 @@ const getBestTeamsOfRank = (rank, teamCount, automaticStat) => {
           addStats(group, teamCode, stat);
           acc.push({
             ...team,
-            group
+            group,
           });
         }
       });
@@ -348,35 +363,106 @@ const updateStats = (stage) => {
   sortStandings();
 
   switch (stage) {
-    case 'ARC': {
+    case "AC": {
+      const matchupIndices = {
+        ABCD: [2, 3, 0, 1],
+        ABCE: [2, 0, 1, 3],
+        ABCF: [2, 0, 1, 3],
+        ABDE: [2, 0, 1, 3],
+        ABDF: [2, 0, 1, 3],
+        ABEF: [2, 0, 1, 3],
+        ACDE: [1, 2, 0, 3],
+        ACDF: [1, 2, 0, 3],
+        ACEF: [1, 0, 3, 2],
+        ADEF: [1, 0, 3, 2],
+        BCDE: [1, 2, 0, 3],
+        BCDF: [1, 2, 0, 3],
+        BCEF: [2, 1, 0, 3],
+        BDEF: [2, 1, 0, 3],
+        CDEF: [0, 1, 3, 2],
+      };
+
+      const thirdPlacedTeams = getBestTeamsOfRank(3, 4, "roundOf16").sort(
+        (a, b) => {
+          const aGroup = a.group.charCodeAt();
+          const bGroup = b.group.charCodeAt();
+
+          return aGroup - bGroup;
+        }
+      );
+
+      const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
+        (acc, { group }) => acc + group,
+        ""
+      );
+      const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
+
       const knockouts = [];
 
-      getBestTeamsOfRank(3, 0, 'quarterfinals');
-
       knockouts.push([
-        getTeamFromStandings('B', 1),
-        getTeamFromStandings('A', 2)
+        getTeamFromStandings("A", 2),
+        getTeamFromStandings("C", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('D', 1),
-        getTeamFromStandings('C', 2)
+        getTeamFromStandings("D", 1),
+        thirdPlacedTeams[scenarioIndices[3]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        getTeamFromStandings('B', 2)
+        getTeamFromStandings("B", 1),
+        thirdPlacedTeams[scenarioIndices[1]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('C', 1),
-        getTeamFromStandings('D', 2)
+        getTeamFromStandings("F", 1),
+        getTeamFromStandings("E", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("C", 1),
+        thirdPlacedTeams[scenarioIndices[2]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("E", 1),
+        getTeamFromStandings("D", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("A", 1),
+        thirdPlacedTeams[scenarioIndices[0]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("B", 2),
+        getTeamFromStandings("F", 2),
       ]);
 
       return knockouts;
     }
-    case 'EQ': {
+    case "ARC": {
+      const knockouts = [];
+
+      getBestTeamsOfRank(3, 0, "quarterfinals");
+
+      knockouts.push([
+        getTeamFromStandings("B", 1),
+        getTeamFromStandings("A", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("D", 1),
+        getTeamFromStandings("C", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("B", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("C", 1),
+        getTeamFromStandings("D", 2),
+      ]);
+
+      return knockouts;
+    }
+    case "EQ": {
       const qualifiedTeams = [];
 
       Object.entries(simStandings).forEach(([group, [qual1, qual2]]) => {
-        const stats = ['totalQualify', 'qualifyFromGroup'];
+        const stats = ["totalQualify", "qualifyFromGroup"];
 
         const q1 = qual1.team;
         const q2 = qual2.team;
@@ -397,10 +483,10 @@ const updateStats = (stage) => {
 
         obj[league] = {
           ...leagueTeams,
-          rest: [...leagueTeams.rest, ...teams]
+          rest: [...leagueTeams.rest, ...teams],
         };
       };
-      
+
       const leagues = ["C", "B", "A"];
       const selectedTeamsFromLeagues = leagues.reduce((acc, cur) => {
         acc[cur] = { groupWinnerSelected: false, teams: [] };
@@ -417,7 +503,11 @@ const updateStats = (stage) => {
             selectedTeamsFromLeague.groupWinnerSelected = true;
           }
         });
-        for (let i = 0; i < rest.length && selectedTeamsFromLeague.teams.length < 4; i += 1) {
+        for (
+          let i = 0;
+          i < rest.length && selectedTeamsFromLeague.teams.length < 4;
+          i += 1
+        ) {
           const team = rest[i];
           if (isQualified(team)) {
             continue;
@@ -428,7 +518,8 @@ const updateStats = (stage) => {
       });
 
       const bestGroupWinnerD = nationsLeagueStandings.D.groupWinners[0];
-      const transitionLetter = (letter, increment = true) => String.fromCharCode(letter.charCodeAt(0) + (increment ? 1 : -1));
+      const transitionLetter = (letter, increment = true) =>
+        String.fromCharCode(letter.charCodeAt(0) + (increment ? 1 : -1));
       leagues.forEach((league) => {
         const { groupWinnerSelected, teams } = selectedTeamsFromLeagues[league];
         let teamsToSelect = 4 - teams.length;
@@ -438,8 +529,14 @@ const updateStats = (stage) => {
             selectedTeamsFromLeagues.D = { teams: [bestGroupWinnerD] };
             teamsToSelect--;
           }
-          for (let group = groupWinnerSelected ? transitionLetter(league) : 'A'; group <= 'D'; group = transitionLetter(group)) {
-            const availableTeams = nationsLeagueStandings[group].rest.filter((team) => !isQualified(team));
+          for (
+            let group = groupWinnerSelected ? transitionLetter(league) : "A";
+            group <= "D";
+            group = transitionLetter(group)
+          ) {
+            const availableTeams = nationsLeagueStandings[group].rest.filter(
+              (team) => !isQualified(team)
+            );
             if (availableTeams.length) {
               const nextTeam = availableTeams[0];
               playoffTeams.push(nextTeam);
@@ -452,7 +549,7 @@ const updateStats = (stage) => {
       });
 
       playoffTeams.forEach((team) => {
-        addStats(null, team, 'qualifyToPlayoffs');
+        addStats(null, team, "qualifyToPlayoffs");
       });
 
       const drawnTeams = [];
@@ -463,10 +560,17 @@ const updateStats = (stage) => {
           drawnTeams.push(...teams);
         } else if (teams.length > 4) {
           const pathTeams = [];
-          if (Object.keys(selectedTeamsFromLeagues).some((league) => league < cur && selectedTeamsFromLeagues[league].teams.length)) {
-            const [groupWinners, rest] = partition(teams, (team) => nationsLeagueStandings[cur].groupWinners.includes(team));
+          if (
+            Object.keys(selectedTeamsFromLeagues).some(
+              (league) =>
+                league < cur && selectedTeamsFromLeagues[league].teams.length
+            )
+          ) {
+            const [groupWinners, rest] = partition(teams, (team) =>
+              nationsLeagueStandings[cur].groupWinners.includes(team)
+            );
             pathTeams.push(...groupWinners);
-            
+
             const pot = rest.filter((team) => !drawnTeams.includes(team));
             const restTeams = sampleSize(pot, 4 - groupWinners.length);
             pathTeams.push(...restTeams);
@@ -477,8 +581,13 @@ const updateStats = (stage) => {
           acc[cur] = pathTeams;
           drawnTeams.push(...pathTeams);
         } else {
-          const findLeague = (team) => Object.keys(selectedTeamsFromLeagues).find((league) => selectedTeamsFromLeagues[league].teams.includes(team));
-          const pathTeams = playoffTeams.filter((team) => !drawnTeams.includes(team));
+          const findLeague = (team) =>
+            Object.keys(selectedTeamsFromLeagues).find((league) =>
+              selectedTeamsFromLeagues[league].teams.includes(team)
+            );
+          const pathTeams = playoffTeams.filter(
+            (team) => !drawnTeams.includes(team)
+          );
           pathTeams.sort((a, b) => {
             const aLeague = findLeague(a);
             const bLeague = findLeague(b);
@@ -499,31 +608,31 @@ const updateStats = (stage) => {
 
       return draws;
     }
-    case 'CA': {
-      getBestTeamsOfRank(5, 0, 'quarterfinals');
+    case "CA": {
+      getBestTeamsOfRank(5, 0, "quarterfinals");
 
       const knockouts = [];
 
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        getTeamFromStandings('B', 4)
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("B", 4),
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 2),
-        getTeamFromStandings('B', 3)
+        getTeamFromStandings("A", 2),
+        getTeamFromStandings("B", 3),
       ]);
       knockouts.push([
-        getTeamFromStandings('B', 1),
-        getTeamFromStandings('A', 4)
+        getTeamFromStandings("B", 1),
+        getTeamFromStandings("A", 4),
       ]);
       knockouts.push([
-        getTeamFromStandings('B', 2),
-        getTeamFromStandings('A', 3)
+        getTeamFromStandings("B", 2),
+        getTeamFromStandings("A", 3),
       ]);
 
       return knockouts;
     }
-    case 'EC': {
+    case "EC": {
       const matchupIndices = {
         ABCD: [0, 3, 1, 2],
         ABCE: [0, 3, 1, 2],
@@ -539,10 +648,10 @@ const updateStats = (stage) => {
         BCDF: [3, 2, 1, 0],
         BCEF: [3, 2, 1, 0],
         BDEF: [3, 2, 1, 0],
-        CDEF: [3, 2, 1, 0]
+        CDEF: [3, 2, 1, 0],
       };
 
-      const thirdPlacedTeams = getBestTeamsOfRank(3, 4, 'roundOf16').sort(
+      const thirdPlacedTeams = getBestTeamsOfRank(3, 4, "roundOf16").sort(
         (a, b) => {
           const aGroup = a.group.charCodeAt();
           const bGroup = b.group.charCodeAt();
@@ -553,48 +662,48 @@ const updateStats = (stage) => {
 
       const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
         (acc, { group }) => acc + group,
-        ''
+        ""
       );
       const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
 
       const knockouts = [];
 
       knockouts.push([
-        getTeamFromStandings('B', 1),
-        thirdPlacedTeams[scenarioIndices[0]].team
+        getTeamFromStandings("B", 1),
+        thirdPlacedTeams[scenarioIndices[0]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        getTeamFromStandings('C', 2)
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("C", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('F', 1),
-        thirdPlacedTeams[scenarioIndices[3]].team
+        getTeamFromStandings("F", 1),
+        thirdPlacedTeams[scenarioIndices[3]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('D', 2),
-        getTeamFromStandings('E', 2)
+        getTeamFromStandings("D", 2),
+        getTeamFromStandings("E", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('E', 1),
-        thirdPlacedTeams[scenarioIndices[2]].team
+        getTeamFromStandings("E", 1),
+        thirdPlacedTeams[scenarioIndices[2]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('D', 1),
-        getTeamFromStandings('F', 2)
+        getTeamFromStandings("D", 1),
+        getTeamFromStandings("F", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('C', 1),
-        thirdPlacedTeams[scenarioIndices[1]].team
+        getTeamFromStandings("C", 1),
+        thirdPlacedTeams[scenarioIndices[1]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 2),
-        getTeamFromStandings('B', 2)
+        getTeamFromStandings("A", 2),
+        getTeamFromStandings("B", 2),
       ]);
 
       return knockouts;
     }
-    case 'AR': {
+    case "AR": {
       const matchupIndices = {
         ABCD: [2, 3, 0, 1],
         ABCE: [2, 0, 1, 3],
@@ -610,10 +719,10 @@ const updateStats = (stage) => {
         BCDF: [1, 2, 0, 3],
         BCEF: [2, 1, 0, 3],
         BDEF: [2, 1, 0, 3],
-        CDEF: [0, 1, 3, 2]
+        CDEF: [0, 1, 3, 2],
       };
 
-      const thirdPlacedTeams = getBestTeamsOfRank(3, 4, 'roundOf16').sort(
+      const thirdPlacedTeams = getBestTeamsOfRank(3, 4, "roundOf16").sort(
         (a, b) => {
           const aGroup = a.group.charCodeAt();
           const bGroup = b.group.charCodeAt();
@@ -624,119 +733,119 @@ const updateStats = (stage) => {
 
       const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
         (acc, { group }) => acc + group,
-        ''
+        ""
       );
       const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
 
       const knockouts = [];
 
       knockouts.push([
-        getTeamFromStandings('A', 2),
-        getTeamFromStandings('C', 2)
+        getTeamFromStandings("A", 2),
+        getTeamFromStandings("C", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('D', 1),
-        thirdPlacedTeams[scenarioIndices[3]].team
+        getTeamFromStandings("D", 1),
+        thirdPlacedTeams[scenarioIndices[3]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('B', 1),
-        thirdPlacedTeams[scenarioIndices[1]].team
+        getTeamFromStandings("B", 1),
+        thirdPlacedTeams[scenarioIndices[1]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('F', 1),
-        getTeamFromStandings('E', 2)
+        getTeamFromStandings("F", 1),
+        getTeamFromStandings("E", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('E', 1),
-        getTeamFromStandings('D', 2)
+        getTeamFromStandings("E", 1),
+        getTeamFromStandings("D", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('C', 1),
-        thirdPlacedTeams[scenarioIndices[2]].team
+        getTeamFromStandings("C", 1),
+        thirdPlacedTeams[scenarioIndices[2]].team,
       ]);
       knockouts.push([
-        getTeamFromStandings('B', 2),
-        getTeamFromStandings('F', 2)
+        getTeamFromStandings("B", 2),
+        getTeamFromStandings("F", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        thirdPlacedTeams[scenarioIndices[0]].team
+        getTeamFromStandings("A", 1),
+        thirdPlacedTeams[scenarioIndices[0]].team,
       ]);
 
       return knockouts;
     }
-    case 'CCH': {
+    case "CCH": {
       const knockouts = [];
 
-      getBestTeamsOfRank(3, 0, 'quarterfinals');
+      getBestTeamsOfRank(3, 0, "quarterfinals");
 
       knockouts.push([
-        getTeamFromStandings('D', 1),
-        getTeamFromStandings('A', 2)
+        getTeamFromStandings("D", 1),
+        getTeamFromStandings("A", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('B', 1),
-        getTeamFromStandings('C', 2)
+        getTeamFromStandings("B", 1),
+        getTeamFromStandings("C", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        getTeamFromStandings('D', 2)
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("D", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('C', 1),
-        getTeamFromStandings('B', 2)
+        getTeamFromStandings("C", 1),
+        getTeamFromStandings("B", 2),
       ]);
 
       return knockouts;
     }
-    case 'WC': {
+    case "WC": {
       const knockouts = [];
 
-      getBestTeamsOfRank(3, 0, 'roundOf16');
+      getBestTeamsOfRank(3, 0, "roundOf16");
 
       knockouts.push([
-        getTeamFromStandings('A', 1),
-        getTeamFromStandings('B', 2)
+        getTeamFromStandings("A", 1),
+        getTeamFromStandings("B", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('C', 1),
-        getTeamFromStandings('D', 2)
+        getTeamFromStandings("C", 1),
+        getTeamFromStandings("D", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('E', 1),
-        getTeamFromStandings('F', 2)
+        getTeamFromStandings("E", 1),
+        getTeamFromStandings("F", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('G', 1),
-        getTeamFromStandings('H', 2)
+        getTeamFromStandings("G", 1),
+        getTeamFromStandings("H", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('B', 1),
-        getTeamFromStandings('A', 2)
+        getTeamFromStandings("B", 1),
+        getTeamFromStandings("A", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('D', 1),
-        getTeamFromStandings('C', 2)
+        getTeamFromStandings("D", 1),
+        getTeamFromStandings("C", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('F', 1),
-        getTeamFromStandings('E', 2)
+        getTeamFromStandings("F", 1),
+        getTeamFromStandings("E", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings('H', 1),
-        getTeamFromStandings('G', 2)
+        getTeamFromStandings("H", 1),
+        getTeamFromStandings("G", 2),
       ]);
 
       return knockouts;
     }
-    case 'CLA': {
+    case "CLA": {
       const finals = [];
 
       let finalsTeams = Object.keys(simStandings).reduce((acc, group) => {
-        addStats(group, getTeamFromStandings(group, 3), 'relegated');
+        addStats(group, getTeamFromStandings(group, 3), "relegated");
 
         const finalQualifier = getTeamFromStandings(group, 1);
-        addStats(group, finalQualifier, 'finals');
+        addStats(group, finalQualifier, "finals");
         acc.push(finalQualifier);
         return acc;
       }, []);
@@ -755,19 +864,19 @@ const updateStats = (stage) => {
 
       return finals;
     }
-    case 'CLB': {
+    case "CLB": {
       Object.keys(simStandings).forEach((group) => {
         const addTeamResult = (rank, stat) => {
           addStats(group, getTeamFromStandings(group, rank), stat);
         };
-        addTeamResult(1, 'promoted');
-        addTeamResult(4, 'relegated');
+        addTeamResult(1, "promoted");
+        addTeamResult(4, "relegated");
       });
       break;
     }
-    case 'CLC': {
+    case "CLC": {
       Object.keys(simStandings).forEach((group) => {
-        addStats(group, getTeamFromStandings(group, 1), 'promoted');
+        addStats(group, getTeamFromStandings(group, 1), "promoted");
       });
       break;
     }
@@ -794,7 +903,7 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
     simResults.push({
       team1: favorite,
       team2: underdog,
-      goalDifference: result
+      goalDifference: result,
     });
 
     const margin = Math.abs(result);
@@ -855,21 +964,21 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
 
 let locationsCountEC = 0;
 const locationsEC = [
-  'ES',
-  'EN',
-  'RO',
-  'DK',
-  'SQ',
-  'EN',
-  'HU',
-  'NL',
-  'DE',
-  'RU',
-  'IT',
-  'AZ',
-  'EN',
-  'EN',
-  'EN'
+  "ES",
+  "EN",
+  "RO",
+  "DK",
+  "SQ",
+  "EN",
+  "HU",
+  "NL",
+  "DE",
+  "RU",
+  "IT",
+  "AZ",
+  "EN",
+  "EN",
+  "EN",
 ];
 
 let knockoutResults = [];
@@ -890,7 +999,7 @@ const findActualWinner = ([team1, team2]) => {
 
 const simulateRound = (location, stat) => (acc, teams, idx) => {
   let matchLocation = location;
-  if (tournament === 'EC') {
+  if (tournament === "EC") {
     matchLocation = locationsEC[locationsCountEC % 15];
     locationsCountEC++;
   }
@@ -900,7 +1009,7 @@ const simulateRound = (location, stat) => (acc, teams, idx) => {
     simulateMatch({
       location: matchLocation,
       teams,
-      isPenaltyShootout: true
+      isPenaltyShootout: true,
     });
 
   if (stat) {
@@ -932,13 +1041,8 @@ const simulateKnockouts = (knockouts, stats) => {
 };
 
 exports.runSimulation = async () => {
-  ({
-    fixtures,
-    nationsLeagueStandings,
-    results,
-    standings,
-    teamRatings
-  } = await init(tournament));
+  ({ fixtures, nationsLeagueStandings, results, standings, teamRatings } =
+    await init(tournament));
 
   // knockoutResults = results.filter((match) =>
   //   match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
@@ -952,8 +1056,8 @@ exports.runSimulation = async () => {
         ...fixtures,
         ...knockoutResults.map((match) => ({
           teams: [match.team1, match.team2],
-          date: match.date
-        }))
+          date: match.date,
+        })),
       ].filter((fixture) => fixture.date.isAfter(date));
 
       const fixture1 = searchBase.find((fixture) =>
@@ -974,14 +1078,14 @@ exports.runSimulation = async () => {
           `Enter the winner:\n1) ${team1}\n2) ${team2}\n`
         );
         switch (winner) {
-          case '1':
+          case "1":
             newGoalDifference = 1;
             break;
-          case '2':
+          case "2":
             newGoalDifference = -1;
             break;
           default:
-            throw new Error('Invalid input');
+            throw new Error("Invalid input");
         }
       }
       knockoutResults[i].goalDifference = newGoalDifference;
@@ -993,7 +1097,7 @@ exports.runSimulation = async () => {
       acc[group] = {};
     }
     acc[group][team] = {
-      ...evaluatedStats[tournament]
+      ...evaluatedStats[tournament],
     };
     return acc;
   }, {});
@@ -1012,18 +1116,18 @@ exports.runSimulation = async () => {
     const playoffs = updateStats(tournament);
 
     switch (tournament) {
-      case 'EQ': {
+      case "EQ": {
         Object.values(playoffs).forEach(([team1, team2, team3, team4]) => {
           const winner1 = simulateMatch({
             location: team1,
             teams: [team1, team4],
-            isPenaltyShootout: true
+            isPenaltyShootout: true,
           });
 
           const winner2 = simulateMatch({
             location: team2,
             teams: [team2, team3],
-            isPenaltyShootout: true
+            isPenaltyShootout: true,
           });
 
           const finalHomeDraw = Math.random();
@@ -1033,32 +1137,33 @@ exports.runSimulation = async () => {
           const playoffWinner = simulateMatch({
             location: playoffFinal[0],
             teams: playoffFinal,
-            isPenaltyShootout: true
+            isPenaltyShootout: true,
           });
 
-          addStats(null, playoffWinner, 'totalQualify', 'qualifyFromPlayoffs');
+          addStats(null, playoffWinner, "totalQualify", "qualifyFromPlayoffs");
         });
         break;
       }
-      case 'CA':
-        simulateKnockouts(playoffs, ['semifinals', 'final', 'champions']);
+      case "CA":
+        simulateKnockouts(playoffs, ["semifinals", "final", "champions"]);
         break;
-      case 'AR':
-      case 'EC':
-      case 'WC':
+      case "AC":
+      case "AR":
+      case "EC":
+      case "WC":
         simulateKnockouts(playoffs, [
-          'quarterfinals',
-          'semifinals',
-          'final',
-          'champions'
+          "quarterfinals",
+          "semifinals",
+          "final",
+          "champions",
         ]);
         break;
-      case 'ARC':
-      case 'CCH':
-        simulateKnockouts(playoffs, ['semifinals', 'final', 'champions']);
+      case "ARC":
+      case "CCH":
+        simulateKnockouts(playoffs, ["semifinals", "final", "champions"]);
         break;
-      case 'CLA':
-        simulateKnockouts(playoffs, [null, 'champions']);
+      case "CLA":
+        simulateKnockouts(playoffs, [null, "champions"]);
         break;
       default:
         break;
