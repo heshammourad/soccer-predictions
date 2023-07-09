@@ -1044,9 +1044,9 @@ exports.runSimulation = async () => {
   ({ fixtures, nationsLeagueStandings, results, standings, teamRatings } =
     await init(tournament));
 
-  // knockoutResults = results.filter((match) =>
-  //   match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
-  // );
+  knockoutResults = results.filter((match) =>
+    match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
+  );
   for (let i = 0; i < knockoutResults.length; i += 1) {
     const { date, team1, team2, goalDifference } = knockoutResults[i];
     if (!goalDifference) {
