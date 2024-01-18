@@ -8,7 +8,7 @@ const { askQuestion, updateStandings } = require("./utils");
 
 const locations = {
   AC: "QA",
-  AR: "EG",
+  AR: "CI",
   ARC: "QA",
   CA: "BR",
   CCH: "US",

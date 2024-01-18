@@ -6,7 +6,7 @@ const { cacheFileDuration, dataPath, forceReload } = require('./configuration');
 
 const dataFiles = {
   AC: '2024_Asian_Cup_',
-  AR: '2019_African_Nations_Cup_',
+  AR: '2024_African_Nations_Cup_',
   ARC: '2021_Arab_Nations_Cup_',
   CA: '2021_Copa_America_',
   CCH: '2023_CONCACAF_Championship_',
@@ -24,7 +24,7 @@ const dataFiles = {
 
 const knockoutStageDates = {
   AC: moment('2024-01-28'),
-  AR: moment('2019-07-05'),
+  AR: moment('2024-01-25'),
   ARC: moment('2021-12-10'),
   CA: moment('2021-07-02'),
   CCH: moment('2023-07-08'),
