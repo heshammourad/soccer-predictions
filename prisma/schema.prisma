@@ -1,0 +1,55 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// This models your existing team_ratings and nations_league_standings
+model Team {
+  id           String   @id // Use the code from your project (e.g., "QA", "CI")
+  name         String
+  currentElo   Int
+  group        String?  // Current tournament group (e.g., "A", "B")
+  homeMatches  Match[]  @relation("HomeTeam")
+  awayMatches  Match[]  @relation("AwayTeam")
+  predictions  Prediction[]
+}
+
+// Replaces your current results/fixtures arrays
+model Match {
+  id             Int      @id @default(autoincrement())
+  tournament     String   // e.g., "WC", "EC", "AC"
+  date           DateTime
+  homeTeamId     String
+  awayTeamId     String
+  homeGoals      Int?     // Null for upcoming fixtures
+  awayGoals      Int?
+  isKnockout     Boolean  @default(false)
+  winnerOverride String?  // Manual field for penalty shootout winners
+  
+  homeTeam       Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam       Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
+}
+
+// Stores the output of your simulation runs
+model Prediction {
+  id           Int      @id @default(autoincrement())
+  teamId       String
+  tournament   String
+  champions    Float    // Percentage (0.0 to 1.0)
+  final        Float
+  semifinals   Float
+  quarterfinals Float
+  updatedAt    DateTime @default(now())
+
+  team         Team     @relation(fields: [teamId], references: [id])
+}
