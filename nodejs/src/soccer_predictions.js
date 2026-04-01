@@ -14,7 +14,7 @@ const locations = {
   CCH: "US",
   CLA: "XX",
   EC: "EN",
-  WC: "QA",
+  WC: "US",
 };
 
 let fixtures;
@@ -44,7 +44,7 @@ const getNationsLeagueRank = () =>
       acc.push(...groupWinners, ...rest);
       return acc;
     },
-    []
+    [],
   );
 
 const getTeamRank = (team) =>
@@ -86,7 +86,7 @@ const convertStandingsToArray = (standingsToConvert) => {
       });
       return acc;
     },
-    {}
+    {},
   );
   return standingsArray;
 };
@@ -99,8 +99,9 @@ const sortStandings = () => {
   });
 };
 
-const getTeamFromStandings = (group, rank) =>
-  simStandings[group][rank - 1].team;
+const getTeamFromStandings = (group, rank) => {
+  return simStandings[group][rank - 1].team;
+};
 
 const evaluatedStats = {
   AC: {
@@ -179,7 +180,7 @@ const evaluatedStats = {
   },
   WC: {
     first: 0,
-    second: 0,
+    roundOf32: 0,
     roundOf16: 0,
     quarterfinals: 0,
     semifinals: 0,
@@ -190,93 +191,93 @@ const evaluatedStats = {
 
 const sortStats =
   (t) =>
-    ([teamA, totalsA], [teamB, totalsB]) => {
-      const order = [];
+  ([teamA, totalsA], [teamB, totalsB]) => {
+    const order = [];
 
-      switch (t) {
-        case "EQ": {
-          order.push(
-            "totalQualify",
-            "qualifyFromGroup",
-            "qualifyFromPlayoffs",
-            "qualifyToPlayoffs"
-          );
-          break;
-        }
-        case "CA":
-          order.push(
-            "champions",
-            "final",
-            "semifinals",
-            "quarterfinals",
-            "first",
-            "second",
-            "third",
-            "fourth"
-          );
-          break;
-        case "AC":
-        case "AR":
-        case "EC":
-          order.push(
-            "champions",
-            "final",
-            "semifinals",
-            "quarterfinals",
-            "roundOf16",
-            "first",
-            "second",
-            "third"
-          );
-          break;
-        case "ARC":
-        case "CCH":
-          order.push(
-            "champions",
-            "final",
-            "semifinals",
-            "quarterfinals",
-            "first",
-            "second"
-          );
-          break;
-        case "CLA":
-          order.push("champions", "finals", "!relegated");
-          break;
-        case "CLB":
-          order.push("promoted", "!relegated");
-          break;
-        case "CLC":
-          order.push("promoted");
-          break;
-        case "WC":
-          order.push(
-            "champions",
-            "final",
-            "semifinals",
-            "quaterfinals",
-            "roundOf16",
-            "first",
-            "second"
-          );
-        default:
-          break;
+    switch (t) {
+      case "EQ": {
+        order.push(
+          "totalQualify",
+          "qualifyFromGroup",
+          "qualifyFromPlayoffs",
+          "qualifyToPlayoffs",
+        );
+        break;
       }
+      case "CA":
+        order.push(
+          "champions",
+          "final",
+          "semifinals",
+          "quarterfinals",
+          "first",
+          "second",
+          "third",
+          "fourth",
+        );
+        break;
+      case "AC":
+      case "AR":
+      case "EC":
+        order.push(
+          "champions",
+          "final",
+          "semifinals",
+          "quarterfinals",
+          "roundOf16",
+          "first",
+          "second",
+          "third",
+        );
+        break;
+      case "ARC":
+      case "CCH":
+        order.push(
+          "champions",
+          "final",
+          "semifinals",
+          "quarterfinals",
+          "first",
+          "second",
+        );
+        break;
+      case "CLA":
+        order.push("champions", "finals", "!relegated");
+        break;
+      case "CLB":
+        order.push("promoted", "!relegated");
+        break;
+      case "CLC":
+        order.push("promoted");
+        break;
+      case "WC":
+        order.push(
+          "champions",
+          "final",
+          "semifinals",
+          "quarterfinals",
+          "roundOf16",
+          "roundOf32",
+          "first",
+        );
+      default:
+        break;
+    }
 
-      for (let stat of order) {
-        if (stat.startsWith("!")) {
-          const s = stat.substr(1);
-          if (totalsA[s] !== totalsB[s]) {
-            return totalsA[s] - totalsB[s];
-          }
-        }
-        if (totalsA[stat] !== totalsB[stat]) {
-          return totalsB[stat] - totalsA[stat];
+    for (let stat of order) {
+      if (stat.startsWith("!")) {
+        const s = stat.substr(1);
+        if (totalsA[s] !== totalsB[s]) {
+          return totalsA[s] - totalsB[s];
         }
       }
+      if (totalsA[stat] !== totalsB[stat]) {
+        return totalsB[stat] - totalsA[stat];
+      }
+    }
 
-      return teamA > teamB ? 1 : -1;
-    };
+    return teamA > teamB ? 1 : -1;
+  };
 
 let stats;
 
@@ -288,7 +289,7 @@ const printStats = () => {
       .sort(sortStats(tournament))
       .reduce((tAcc, [team, totals]) => {
         const [, { name }] = Object.entries(teamRatings).find(
-          ([code]) => code === team
+          ([code]) => code === team,
         );
         tAcc += `${name}`;
 
@@ -311,7 +312,9 @@ const printStats = () => {
 
 const addStat = (team, ...statList) => {
   statList.forEach((stat) => {
-    team[stat]++;
+    if (team[stat] != undefined) {
+      team[stat]++;
+    }
   });
 };
 
@@ -320,7 +323,7 @@ const addStats = (group, team, ...statList) => {
     addStat(stats[group][team], ...statList);
   } else {
     const group = Object.values(stats).find((group) =>
-      Object.keys(group).includes(team)
+      Object.keys(group).includes(team),
     );
     addStat(group[team], ...statList);
   }
@@ -388,12 +391,12 @@ const updateStats = (stage) => {
           const bGroup = b.group.charCodeAt();
 
           return aGroup - bGroup;
-        }
+        },
       );
 
       const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
         (acc, { group }) => acc + group,
-        ""
+        "",
       );
       const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
 
@@ -535,7 +538,7 @@ const updateStats = (stage) => {
             group = transitionLetter(group)
           ) {
             const availableTeams = nationsLeagueStandings[group].rest.filter(
-              (team) => !isQualified(team)
+              (team) => !isQualified(team),
             );
             if (availableTeams.length) {
               const nextTeam = availableTeams[0];
@@ -563,11 +566,11 @@ const updateStats = (stage) => {
           if (
             Object.keys(selectedTeamsFromLeagues).some(
               (league) =>
-                league < cur && selectedTeamsFromLeagues[league].teams.length
+                league < cur && selectedTeamsFromLeagues[league].teams.length,
             )
           ) {
             const [groupWinners, rest] = partition(teams, (team) =>
-              nationsLeagueStandings[cur].groupWinners.includes(team)
+              nationsLeagueStandings[cur].groupWinners.includes(team),
             );
             pathTeams.push(...groupWinners);
 
@@ -583,10 +586,10 @@ const updateStats = (stage) => {
         } else {
           const findLeague = (team) =>
             Object.keys(selectedTeamsFromLeagues).find((league) =>
-              selectedTeamsFromLeagues[league].teams.includes(team)
+              selectedTeamsFromLeagues[league].teams.includes(team),
             );
           const pathTeams = playoffTeams.filter(
-            (team) => !drawnTeams.includes(team)
+            (team) => !drawnTeams.includes(team),
           );
           pathTeams.sort((a, b) => {
             const aLeague = findLeague(a);
@@ -657,12 +660,12 @@ const updateStats = (stage) => {
           const bGroup = b.group.charCodeAt();
 
           return aGroup - bGroup;
-        }
+        },
       );
 
       const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
         (acc, { group }) => acc + group,
-        ""
+        "",
       );
       const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
 
@@ -728,12 +731,12 @@ const updateStats = (stage) => {
           const bGroup = b.group.charCodeAt();
 
           return aGroup - bGroup;
-        }
+        },
       );
 
       const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
         (acc, { group }) => acc + group,
-        ""
+        "",
       );
       const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
 
@@ -799,41 +802,577 @@ const updateStats = (stage) => {
       return knockouts;
     }
     case "WC": {
+      const matchupIndices = {
+        ABCDEFGH: [7, 6, 1, 2, 0, 5, 3, 4],
+        ABCDEFGI: [2, 6, 1, 3, 0, 5, 4, 7],
+        ABCDEFGJ: [2, 6, 1, 3, 0, 5, 4, 7],
+        ABCDEFGK: [2, 6, 1, 3, 0, 5, 4, 7],
+        ABCDEFGL: [2, 6, 1, 3, 0, 5, 7, 4],
+        ABCDEFHI: [6, 4, 1, 2, 0, 5, 3, 7],
+        ABCDEFHJ: [6, 7, 1, 2, 0, 5, 3, 4],
+        ABCDEFHK: [6, 4, 1, 2, 0, 5, 3, 7],
+        ABCDEFHL: [6, 5, 1, 2, 0, 3, 7, 4],
+        ABCDEFIJ: [2, 7, 1, 3, 0, 5, 4, 6],
+        ABCDEFIK: [2, 4, 1, 3, 0, 5, 6, 7],
+        ABCDEFIL: [2, 4, 1, 3, 0, 5, 7, 6],
+        ABCDEFJK: [2, 6, 1, 3, 0, 5, 4, 7],
+        ABCDEFJL: [2, 6, 1, 3, 0, 5, 7, 4],
+        ABCDEFKL: [2, 4, 1, 3, 0, 5, 7, 6],
+        ABCDEGHI: [6, 5, 1, 2, 0, 3, 4, 7],
+        ABCDEGHJ: [6, 5, 1, 2, 0, 3, 4, 7],
+        ABCDEGHK: [6, 5, 1, 2, 0, 3, 4, 7],
+        ABCDEGHL: [6, 5, 1, 2, 0, 3, 7, 4],
+        ABCDEGIJ: [4, 5, 1, 2, 0, 3, 6, 7],
+        ABCDEGIK: [4, 5, 1, 2, 0, 3, 6, 7],
+        ABCDEGIL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDEGJK: [4, 5, 1, 2, 0, 3, 6, 7],
+        ABCDEGJL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDEGKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDEHIJ: [5, 7, 1, 2, 0, 3, 4, 6],
+        ABCDEHIK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCDEHIL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDEHJK: [5, 6, 1, 2, 0, 3, 4, 7],
+        ABCDEHJL: [5, 6, 1, 2, 0, 3, 7, 4],
+        ABCDEHKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDEIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABCDEIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABCDEIKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDEJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDFGHI: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABCDFGHJ: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABCDFGHK: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABCDFGHL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDFGIJ: [2, 5, 1, 3, 0, 4, 6, 7],
+        ABCDFGIK: [2, 5, 1, 3, 0, 4, 6, 7],
+        ABCDFGIL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDFGJK: [2, 5, 1, 3, 0, 4, 6, 7],
+        ABCDFGJL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDFGKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDFHIJ: [5, 7, 1, 2, 0, 4, 3, 6],
+        ABCDFHIK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCDFHIL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDFHJK: [5, 6, 1, 2, 0, 4, 3, 7],
+        ABCDFHJL: [2, 6, 1, 3, 0, 4, 7, 5],
+        ABCDFHKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDFIJK: [2, 6, 1, 3, 0, 4, 5, 7],
+        ABCDFIJL: [2, 6, 1, 3, 0, 4, 7, 5],
+        ABCDFIKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDFJKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDGHIJ: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCDGHIK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCDGHIL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDGHJK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCDGHJL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDGHKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDGIJK: [2, 6, 1, 3, 0, 4, 5, 7],
+        ABCDGIJL: [2, 6, 1, 3, 0, 4, 7, 5],
+        ABCDGIKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCDGJKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCDHIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABCDHIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABCDHIKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDHJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCDIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCEFGHI: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABCEFGHJ: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABCEFGHK: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABCEFGHL: [6, 5, 1, 2, 0, 4, 7, 3],
+        ABCEFGIJ: [3, 5, 1, 2, 0, 4, 6, 7],
+        ABCEFGIK: [3, 5, 1, 2, 0, 4, 6, 7],
+        ABCEFGIL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEFGJK: [3, 5, 1, 2, 0, 4, 6, 7],
+        ABCEFGJL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEFGKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEFHIJ: [5, 7, 1, 2, 0, 4, 3, 6],
+        ABCEFHIK: [5, 3, 1, 2, 0, 4, 6, 7],
+        ABCEFHIL: [5, 3, 1, 2, 0, 4, 7, 6],
+        ABCEFHJK: [5, 6, 1, 2, 0, 4, 3, 7],
+        ABCEFHJL: [5, 6, 1, 2, 0, 4, 7, 3],
+        ABCEFHKL: [5, 3, 1, 2, 0, 4, 7, 6],
+        ABCEFIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABCEFIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABCEFIKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEFJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEGHIJ: [5, 7, 1, 2, 0, 4, 3, 6],
+        ABCEGHIK: [3, 4, 1, 2, 0, 5, 6, 7],
+        ABCEGHIL: [3, 4, 1, 2, 0, 5, 7, 6],
+        ABCEGHJK: [5, 6, 1, 2, 0, 4, 3, 7],
+        ABCEGHJL: [5, 6, 1, 2, 0, 4, 7, 3],
+        ABCEGHKL: [3, 4, 1, 2, 0, 5, 7, 6],
+        ABCEGIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABCEGIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABCEGIKL: [3, 4, 1, 0, 5, 2, 7, 6],
+        ABCEGJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEHIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABCEHIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABCEHIKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEHJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABCEIJKL: [3, 5, 1, 0, 4, 2, 7, 6],
+        ABCFGHIJ: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCFGHIK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCFGHIL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCFGHJK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABCFGHJL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCFGHKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCFGIJK: [2, 6, 1, 3, 0, 4, 5, 7],
+        ABCFGIJL: [2, 6, 1, 3, 0, 4, 7, 5],
+        ABCFGIKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABCFGJKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABCFHIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABCFHIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABCFHIKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCFHJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCFIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCGHIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABCGHIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABCGHIKL: [5, 3, 1, 2, 0, 4, 7, 6],
+        ABCGHJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCGIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABCHIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABDEFGHI: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABDEFGHJ: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABDEFGHK: [6, 5, 1, 2, 0, 4, 3, 7],
+        ABDEFGHL: [6, 5, 1, 2, 0, 4, 7, 3],
+        ABDEFGIJ: [3, 5, 1, 2, 0, 4, 6, 7],
+        ABDEFGIK: [3, 5, 1, 2, 0, 4, 6, 7],
+        ABDEFGIL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEFGJK: [3, 5, 1, 2, 0, 4, 6, 7],
+        ABDEFGJL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEFGKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEFHIJ: [5, 7, 1, 2, 0, 4, 3, 6],
+        ABDEFHIK: [5, 3, 1, 2, 0, 4, 6, 7],
+        ABDEFHIL: [5, 3, 1, 2, 0, 4, 7, 6],
+        ABDEFHJK: [5, 6, 1, 2, 0, 4, 3, 7],
+        ABDEFHJL: [5, 6, 1, 2, 0, 4, 7, 3],
+        ABDEFHKL: [5, 3, 1, 2, 0, 4, 7, 6],
+        ABDEFIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABDEFIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABDEFIKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEFJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEGHIJ: [5, 7, 1, 2, 0, 4, 3, 6],
+        ABDEGHIK: [3, 4, 1, 2, 0, 5, 6, 7],
+        ABDEGHIL: [3, 4, 1, 2, 0, 5, 7, 6],
+        ABDEGHJK: [5, 6, 1, 2, 0, 4, 3, 7],
+        ABDEGHJL: [5, 6, 1, 2, 0, 4, 7, 3],
+        ABDEGHKL: [3, 4, 1, 2, 0, 5, 7, 6],
+        ABDEGIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABDEGIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABDEGIKL: [3, 4, 1, 0, 5, 2, 7, 6],
+        ABDEGJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEHIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABDEHIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABDEHIKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEHJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDEIJKL: [3, 5, 1, 0, 4, 2, 7, 6],
+        ABDFGHIJ: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABDFGHIK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABDFGHIL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABDFGHJK: [5, 4, 1, 2, 0, 3, 6, 7],
+        ABDFGHJL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABDFGHKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABDFGIJK: [3, 6, 1, 2, 0, 4, 5, 7],
+        ABDFGIJL: [3, 6, 1, 2, 0, 4, 7, 5],
+        ABDFGIKL: [5, 4, 1, 2, 0, 3, 7, 6],
+        ABDFGJKL: [3, 5, 1, 2, 0, 4, 7, 6],
+        ABDFHIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABDFHIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABDFHIKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABDFHJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABDFIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABDGHIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABDGHIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABDGHIKL: [5, 3, 1, 2, 0, 4, 7, 6],
+        ABDGHJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABDGIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABDHIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABEFGHIJ: [5, 7, 1, 3, 0, 4, 2, 6],
+        ABEFGHIK: [2, 4, 1, 3, 0, 5, 6, 7],
+        ABEFGHIL: [2, 4, 1, 3, 0, 5, 7, 6],
+        ABEFGHJK: [5, 6, 1, 3, 0, 4, 2, 7],
+        ABEFGHJL: [5, 6, 1, 3, 0, 4, 7, 2],
+        ABEFGHKL: [2, 4, 1, 3, 0, 5, 7, 6],
+        ABEFGIJK: [2, 6, 1, 3, 0, 4, 5, 7],
+        ABEFGIJL: [2, 6, 1, 3, 0, 4, 7, 5],
+        ABEFGIKL: [2, 4, 1, 0, 5, 3, 7, 6],
+        ABEFGJKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABEFHIJK: [2, 6, 1, 3, 0, 4, 5, 7],
+        ABEFHIJL: [2, 6, 1, 3, 0, 4, 7, 5],
+        ABEFHIKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABEFHJKL: [2, 5, 1, 3, 0, 4, 7, 6],
+        ABEFIJKL: [2, 5, 1, 0, 4, 3, 7, 6],
+        ABEGHIJK: [2, 6, 1, 0, 4, 3, 5, 7],
+        ABEGHIJL: [2, 6, 1, 0, 4, 3, 7, 5],
+        ABEGHIKL: [2, 3, 1, 0, 5, 4, 7, 6],
+        ABEGHJKL: [2, 5, 1, 0, 4, 3, 7, 6],
+        ABEGIJKL: [2, 5, 1, 0, 4, 3, 7, 6],
+        ABEHIJKL: [2, 5, 1, 0, 4, 3, 7, 6],
+        ABFGHIJK: [4, 6, 1, 2, 0, 3, 5, 7],
+        ABFGHIJL: [4, 6, 1, 2, 0, 3, 7, 5],
+        ABFGHIKL: [4, 3, 1, 0, 5, 2, 7, 6],
+        ABFGHJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABFGIJKL: [4, 5, 1, 2, 0, 3, 7, 6],
+        ABFHIJKL: [3, 5, 1, 0, 4, 2, 7, 6],
+        ABGHIJKL: [3, 5, 1, 0, 4, 2, 7, 6],
+        ACDEFGHI: [6, 5, 3, 1, 0, 4, 2, 7],
+        ACDEFGHJ: [6, 5, 7, 1, 0, 4, 2, 3],
+        ACDEFGHK: [6, 5, 3, 1, 0, 4, 2, 7],
+        ACDEFGHL: [6, 5, 4, 1, 0, 2, 7, 3],
+        ACDEFGIJ: [1, 5, 7, 2, 0, 4, 3, 6],
+        ACDEFGIK: [1, 5, 3, 2, 0, 4, 6, 7],
+        ACDEFGIL: [1, 5, 3, 2, 0, 4, 7, 6],
+        ACDEFGJK: [1, 5, 6, 2, 0, 4, 3, 7],
+        ACDEFGJL: [1, 5, 6, 2, 0, 4, 7, 3],
+        ACDEFGKL: [1, 5, 3, 2, 0, 4, 7, 6],
+        ACDEFHIJ: [5, 7, 3, 1, 0, 4, 2, 6],
+        ACDEFHIK: [5, 3, 4, 1, 0, 2, 6, 7],
+        ACDEFHIL: [5, 3, 4, 1, 0, 2, 7, 6],
+        ACDEFHJK: [5, 6, 3, 1, 0, 4, 2, 7],
+        ACDEFHJL: [5, 6, 4, 1, 0, 2, 7, 3],
+        ACDEFHKL: [5, 3, 4, 1, 0, 2, 7, 6],
+        ACDEFIJK: [1, 6, 3, 2, 0, 4, 5, 7],
+        ACDEFIJL: [1, 6, 3, 2, 0, 4, 7, 5],
+        ACDEFIKL: [1, 3, 5, 2, 0, 4, 7, 6],
+        ACDEFJKL: [1, 5, 3, 2, 0, 4, 7, 6],
+        ACDEGHIJ: [5, 4, 7, 1, 0, 2, 3, 6],
+        ACDEGHIK: [5, 4, 3, 1, 0, 2, 6, 7],
+        ACDEGHIL: [5, 4, 3, 1, 0, 2, 7, 6],
+        ACDEGHJK: [5, 4, 6, 1, 0, 2, 3, 7],
+        ACDEGHJL: [5, 4, 6, 1, 0, 2, 7, 3],
+        ACDEGHKL: [5, 4, 3, 1, 0, 2, 7, 6],
+        ACDEGIJK: [3, 4, 6, 1, 0, 2, 5, 7],
+        ACDEGIJL: [3, 4, 6, 1, 0, 2, 7, 5],
+        ACDEGIKL: [3, 4, 5, 1, 0, 2, 7, 6],
+        ACDEGJKL: [3, 4, 5, 1, 0, 2, 7, 6],
+        ACDEHIJK: [4, 6, 3, 1, 0, 2, 5, 7],
+        ACDEHIJL: [4, 6, 3, 1, 0, 2, 7, 5],
+        ACDEHIKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACDEHJKL: [4, 5, 3, 1, 0, 2, 7, 6],
+        ACDEIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        ACDFGHIJ: [5, 4, 7, 1, 0, 3, 2, 6],
+        ACDFGHIK: [5, 4, 3, 1, 0, 2, 6, 7],
+        ACDFGHIL: [5, 4, 3, 1, 0, 2, 7, 6],
+        ACDFGHJK: [5, 4, 6, 1, 0, 3, 2, 7],
+        ACDFGHJL: [1, 4, 6, 2, 0, 3, 7, 5],
+        ACDFGHKL: [5, 4, 3, 1, 0, 2, 7, 6],
+        ACDFGIJK: [1, 4, 6, 2, 0, 3, 5, 7],
+        ACDFGIJL: [1, 4, 6, 2, 0, 3, 7, 5],
+        ACDFGIKL: [1, 4, 5, 2, 0, 3, 7, 6],
+        ACDFGJKL: [1, 4, 5, 2, 0, 3, 7, 6],
+        ACDFHIJK: [4, 6, 3, 1, 0, 2, 5, 7],
+        ACDFHIJL: [4, 6, 3, 1, 0, 2, 7, 5],
+        ACDFHIKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACDFHJKL: [4, 5, 3, 1, 0, 2, 7, 6],
+        ACDFIJKL: [1, 5, 4, 2, 0, 3, 7, 6],
+        ACDGHIJK: [4, 3, 6, 1, 0, 2, 5, 7],
+        ACDGHIJL: [4, 3, 6, 1, 0, 2, 7, 5],
+        ACDGHIKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACDGHJKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACDGIJKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACDHIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        ACEFGHIJ: [5, 4, 7, 1, 0, 3, 2, 6],
+        ACEFGHIK: [5, 4, 2, 1, 0, 3, 6, 7],
+        ACEFGHIL: [5, 4, 2, 1, 0, 3, 7, 6],
+        ACEFGHJK: [5, 4, 6, 1, 0, 3, 2, 7],
+        ACEFGHJL: [5, 4, 6, 1, 0, 3, 7, 2],
+        ACEFGHKL: [5, 4, 2, 1, 0, 3, 7, 6],
+        ACEFGIJK: [2, 4, 6, 1, 0, 3, 5, 7],
+        ACEFGIJL: [2, 4, 6, 1, 0, 3, 7, 5],
+        ACEFGIKL: [2, 4, 5, 1, 0, 3, 7, 6],
+        ACEFGJKL: [2, 4, 5, 1, 0, 3, 7, 6],
+        ACEFHIJK: [4, 6, 2, 1, 0, 3, 5, 7],
+        ACEFHIJL: [4, 6, 2, 1, 0, 3, 7, 5],
+        ACEFHIKL: [4, 2, 5, 1, 0, 3, 7, 6],
+        ACEFHJKL: [4, 5, 2, 1, 0, 3, 7, 6],
+        ACEFIJKL: [2, 5, 4, 1, 0, 3, 7, 6],
+        ACEGHIJK: [2, 3, 6, 1, 0, 4, 5, 7],
+        ACEGHIJL: [2, 3, 6, 1, 0, 4, 7, 5],
+        ACEGHIKL: [2, 3, 5, 1, 0, 4, 7, 6],
+        ACEGHJKL: [2, 3, 5, 1, 0, 4, 7, 6],
+        ACEGIJKL: [2, 5, 4, 1, 0, 3, 7, 6],
+        ACEHIJKL: [2, 5, 4, 1, 0, 3, 7, 6],
+        ACFGHIJK: [4, 3, 6, 1, 0, 2, 5, 7],
+        ACFGHIJL: [4, 3, 6, 1, 0, 2, 7, 5],
+        ACFGHIKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACFGHJKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACFGIJKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ACFHIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        ACGHIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        ADEFGHIJ: [5, 4, 7, 1, 0, 3, 2, 6],
+        ADEFGHIK: [5, 4, 2, 1, 0, 3, 6, 7],
+        ADEFGHIL: [5, 4, 2, 1, 0, 3, 7, 6],
+        ADEFGHJK: [5, 4, 6, 1, 0, 3, 2, 7],
+        ADEFGHJL: [5, 4, 6, 1, 0, 3, 7, 2],
+        ADEFGHKL: [5, 4, 2, 1, 0, 3, 7, 6],
+        ADEFGIJK: [2, 4, 6, 1, 0, 3, 5, 7],
+        ADEFGIJL: [2, 4, 6, 1, 0, 3, 7, 5],
+        ADEFGIKL: [2, 4, 5, 1, 0, 3, 7, 6],
+        ADEFGJKL: [2, 4, 5, 1, 0, 3, 7, 6],
+        ADEFHIJK: [4, 6, 2, 1, 0, 3, 5, 7],
+        ADEFHIJL: [4, 6, 2, 1, 0, 3, 7, 5],
+        ADEFHIKL: [4, 2, 5, 1, 0, 3, 7, 6],
+        ADEFHJKL: [4, 5, 2, 1, 0, 3, 7, 6],
+        ADEFIJKL: [2, 5, 4, 1, 0, 3, 7, 6],
+        ADEGHIJK: [2, 3, 6, 1, 0, 4, 5, 7],
+        ADEGHIJL: [2, 3, 6, 1, 0, 4, 7, 5],
+        ADEGHIKL: [2, 3, 5, 1, 0, 4, 7, 6],
+        ADEGHJKL: [2, 3, 5, 1, 0, 4, 7, 6],
+        ADEGIJKL: [2, 5, 4, 1, 0, 3, 7, 6],
+        ADEHIJKL: [2, 5, 4, 1, 0, 3, 7, 6],
+        ADFGHIJK: [4, 3, 6, 1, 0, 2, 5, 7],
+        ADFGHIJL: [4, 3, 6, 1, 0, 2, 7, 5],
+        ADFGHIKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ADFGHJKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ADFGIJKL: [4, 3, 5, 1, 0, 2, 7, 6],
+        ADFHIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        ADGHIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        AEFGHIJK: [1, 3, 6, 2, 0, 4, 5, 7],
+        AEFGHIJL: [1, 3, 6, 2, 0, 4, 7, 5],
+        AEFGHIKL: [1, 3, 5, 2, 0, 4, 7, 6],
+        AEFGHJKL: [1, 3, 5, 2, 0, 4, 7, 6],
+        AEFGIJKL: [1, 5, 4, 2, 0, 3, 7, 6],
+        AEFHIJKL: [1, 5, 4, 2, 0, 3, 7, 6],
+        AEGHIJKL: [1, 5, 4, 0, 3, 2, 7, 6],
+        AFGHIJKL: [3, 5, 4, 1, 0, 2, 7, 6],
+        BCDEFGHI: [1, 5, 0, 2, 6, 4, 3, 7],
+        BCDEFGHJ: [6, 5, 0, 1, 7, 4, 2, 3],
+        BCDEFGHK: [1, 5, 0, 2, 6, 4, 3, 7],
+        BCDEFGHL: [1, 5, 0, 2, 6, 4, 7, 3],
+        BCDEFGIJ: [1, 5, 0, 2, 7, 4, 3, 6],
+        BCDEFGIK: [1, 5, 0, 2, 3, 4, 6, 7],
+        BCDEFGIL: [1, 5, 0, 2, 3, 4, 7, 6],
+        BCDEFGJK: [1, 5, 0, 2, 6, 4, 3, 7],
+        BCDEFGJL: [1, 5, 0, 2, 6, 4, 7, 3],
+        BCDEFGKL: [1, 5, 0, 2, 3, 4, 7, 6],
+        BCDEFHIJ: [1, 7, 0, 2, 5, 4, 3, 6],
+        BCDEFHIK: [1, 3, 0, 2, 5, 4, 6, 7],
+        BCDEFHIL: [1, 3, 0, 2, 5, 4, 7, 6],
+        BCDEFHJK: [1, 6, 0, 2, 5, 4, 3, 7],
+        BCDEFHJL: [1, 6, 0, 2, 5, 4, 7, 3],
+        BCDEFHKL: [1, 3, 0, 2, 5, 4, 7, 6],
+        BCDEFIJK: [1, 6, 0, 2, 3, 4, 5, 7],
+        BCDEFIJL: [1, 6, 0, 2, 3, 4, 7, 5],
+        BCDEFIKL: [1, 3, 0, 2, 5, 4, 7, 6],
+        BCDEFJKL: [1, 5, 0, 2, 3, 4, 7, 6],
+        BCDEGHIJ: [5, 4, 0, 1, 7, 2, 3, 6],
+        BCDEGHIK: [3, 4, 0, 1, 5, 2, 6, 7],
+        BCDEGHIL: [3, 4, 0, 1, 5, 2, 7, 6],
+        BCDEGHJK: [5, 4, 0, 1, 6, 2, 3, 7],
+        BCDEGHJL: [5, 4, 0, 1, 6, 2, 7, 3],
+        BCDEGHKL: [3, 4, 0, 1, 5, 2, 7, 6],
+        BCDEGIJK: [3, 4, 0, 1, 6, 2, 5, 7],
+        BCDEGIJL: [3, 4, 0, 1, 6, 2, 7, 5],
+        BCDEGIKL: [3, 4, 0, 1, 5, 2, 7, 6],
+        BCDEGJKL: [3, 4, 0, 1, 5, 2, 7, 6],
+        BCDEHIJK: [3, 6, 0, 1, 4, 2, 5, 7],
+        BCDEHIJL: [3, 6, 0, 1, 4, 2, 7, 5],
+        BCDEHIKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BCDEHJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BCDEIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BCDFGHIJ: [5, 4, 0, 1, 7, 3, 2, 6],
+        BCDFGHIK: [1, 4, 0, 2, 5, 3, 6, 7],
+        BCDFGHIL: [1, 4, 0, 2, 5, 3, 7, 6],
+        BCDFGHJK: [5, 4, 0, 1, 6, 3, 2, 7],
+        BCDFGHJL: [1, 4, 0, 2, 5, 3, 7, 6],
+        BCDFGHKL: [1, 4, 0, 2, 5, 3, 7, 6],
+        BCDFGIJK: [1, 4, 0, 2, 6, 3, 5, 7],
+        BCDFGIJL: [1, 4, 0, 2, 6, 3, 7, 5],
+        BCDFGIKL: [1, 4, 0, 2, 5, 3, 7, 6],
+        BCDFGJKL: [1, 4, 0, 2, 5, 3, 7, 6],
+        BCDFHIJK: [1, 6, 0, 2, 4, 3, 5, 7],
+        BCDFHIJL: [1, 6, 0, 2, 4, 3, 7, 5],
+        BCDFHIKL: [1, 5, 0, 2, 4, 3, 7, 6],
+        BCDFHJKL: [1, 5, 0, 2, 4, 3, 7, 6],
+        BCDFIJKL: [1, 5, 0, 2, 4, 3, 7, 6],
+        BCDGHIJK: [4, 3, 0, 1, 6, 2, 5, 7],
+        BCDGHIJL: [4, 3, 0, 1, 6, 2, 7, 5],
+        BCDGHIKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BCDGHJKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BCDGIJKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BCDHIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BCEFGHIJ: [5, 4, 0, 1, 7, 3, 2, 6],
+        BCEFGHIK: [2, 4, 0, 1, 5, 3, 6, 7],
+        BCEFGHIL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BCEFGHJK: [5, 4, 0, 1, 6, 3, 2, 7],
+        BCEFGHJL: [5, 4, 0, 1, 6, 3, 7, 2],
+        BCEFGHKL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BCEFGIJK: [2, 4, 0, 1, 6, 3, 5, 7],
+        BCEFGIJL: [2, 4, 0, 1, 6, 3, 7, 5],
+        BCEFGIKL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BCEFGJKL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BCEFHIJK: [2, 6, 0, 1, 4, 3, 5, 7],
+        BCEFHIJL: [2, 6, 0, 1, 4, 3, 7, 5],
+        BCEFHIKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BCEFHJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BCEFIJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BCEGHIJK: [2, 6, 0, 1, 4, 3, 5, 7],
+        BCEGHIJL: [2, 6, 0, 1, 4, 3, 7, 5],
+        BCEGHIKL: [2, 3, 0, 1, 5, 4, 7, 6],
+        BCEGHJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BCEGIJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BCEHIJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BCFGHIJK: [4, 3, 0, 1, 6, 2, 5, 7],
+        BCFGHIJL: [4, 3, 0, 1, 6, 2, 7, 5],
+        BCFGHIKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BCFGHJKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BCFGIJKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BCFHIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BCGHIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BDEFGHIJ: [5, 4, 0, 1, 7, 3, 2, 6],
+        BDEFGHIK: [2, 4, 0, 1, 5, 3, 6, 7],
+        BDEFGHIL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BDEFGHJK: [5, 4, 0, 1, 6, 3, 2, 7],
+        BDEFGHJL: [5, 4, 0, 1, 6, 3, 7, 2],
+        BDEFGHKL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BDEFGIJK: [2, 4, 0, 1, 6, 3, 5, 7],
+        BDEFGIJL: [2, 4, 0, 1, 6, 3, 7, 5],
+        BDEFGIKL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BDEFGJKL: [2, 4, 0, 1, 5, 3, 7, 6],
+        BDEFHIJK: [2, 6, 0, 1, 4, 3, 5, 7],
+        BDEFHIJL: [2, 6, 0, 1, 4, 3, 7, 5],
+        BDEFHIKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BDEFHJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BDEFIJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BDEGHIJK: [2, 6, 0, 1, 4, 3, 5, 7],
+        BDEGHIJL: [2, 6, 0, 1, 4, 3, 7, 5],
+        BDEGHIKL: [2, 3, 0, 1, 5, 4, 7, 6],
+        BDEGHJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BDEGIJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BDEHIJKL: [2, 5, 0, 1, 4, 3, 7, 6],
+        BDFGHIJK: [4, 3, 0, 1, 6, 2, 5, 7],
+        BDFGHIJL: [4, 3, 0, 1, 6, 2, 7, 5],
+        BDFGHIKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BDFGHJKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BDFGIJKL: [4, 3, 0, 1, 5, 2, 7, 6],
+        BDFHIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BDGHIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        BEFGHIJK: [1, 6, 0, 2, 4, 3, 5, 7],
+        BEFGHIJL: [1, 6, 0, 2, 4, 3, 7, 5],
+        BEFGHIKL: [1, 3, 0, 2, 5, 4, 7, 6],
+        BEFGHJKL: [1, 5, 0, 2, 4, 3, 7, 6],
+        BEFGIJKL: [1, 5, 0, 2, 4, 3, 7, 6],
+        BEFHIJKL: [1, 5, 0, 2, 4, 3, 7, 6],
+        BEGHIJKL: [1, 5, 4, 0, 3, 2, 7, 6],
+        BFGHIJKL: [3, 5, 0, 1, 4, 2, 7, 6],
+        CDEFGHIJ: [0, 4, 7, 1, 5, 3, 2, 6],
+        CDEFGHIK: [0, 4, 2, 1, 5, 3, 6, 7],
+        CDEFGHIL: [0, 4, 2, 1, 5, 3, 7, 6],
+        CDEFGHJK: [0, 4, 6, 1, 5, 3, 2, 7],
+        CDEFGHJL: [0, 4, 6, 1, 5, 3, 7, 2],
+        CDEFGHKL: [0, 4, 2, 1, 5, 3, 7, 6],
+        CDEFGIJK: [0, 4, 2, 1, 6, 3, 5, 7],
+        CDEFGIJL: [0, 4, 2, 1, 6, 3, 7, 5],
+        CDEFGIKL: [0, 4, 2, 1, 5, 3, 7, 6],
+        CDEFGJKL: [0, 4, 2, 1, 5, 3, 7, 6],
+        CDEFHIJK: [0, 6, 2, 1, 4, 3, 5, 7],
+        CDEFHIJL: [0, 6, 2, 1, 4, 3, 7, 5],
+        CDEFHIKL: [0, 2, 5, 1, 4, 3, 7, 6],
+        CDEFHJKL: [0, 5, 2, 1, 4, 3, 7, 6],
+        CDEFIJKL: [0, 5, 2, 1, 4, 3, 7, 6],
+        CDEGHIJK: [2, 3, 6, 0, 4, 1, 5, 7],
+        CDEGHIJL: [2, 3, 6, 0, 4, 1, 7, 5],
+        CDEGHIKL: [2, 3, 5, 0, 4, 1, 7, 6],
+        CDEGHJKL: [2, 3, 5, 0, 4, 1, 7, 6],
+        CDEGIJKL: [2, 3, 4, 0, 5, 1, 7, 6],
+        CDEHIJKL: [2, 5, 4, 0, 3, 1, 7, 6],
+        CDFGHIJK: [0, 3, 6, 1, 4, 2, 5, 7],
+        CDFGHIJL: [0, 3, 6, 1, 4, 2, 7, 5],
+        CDFGHIKL: [0, 3, 5, 1, 4, 2, 7, 6],
+        CDFGHJKL: [0, 3, 5, 1, 4, 2, 7, 6],
+        CDFGIJKL: [0, 3, 4, 1, 5, 2, 7, 6],
+        CDFHIJKL: [0, 5, 4, 1, 3, 2, 7, 6],
+        CDGHIJKL: [3, 2, 4, 0, 5, 1, 7, 6],
+        CEFGHIJK: [1, 3, 6, 0, 4, 2, 5, 7],
+        CEFGHIJL: [1, 3, 6, 0, 4, 2, 7, 5],
+        CEFGHIKL: [1, 3, 5, 0, 4, 2, 7, 6],
+        CEFGHJKL: [1, 3, 5, 0, 4, 2, 7, 6],
+        CEFGIJKL: [1, 3, 4, 0, 5, 2, 7, 6],
+        CEFHIJKL: [1, 5, 4, 0, 3, 2, 7, 6],
+        CEGHIJKL: [1, 5, 4, 0, 3, 2, 7, 6],
+        CFGHIJKL: [3, 2, 4, 0, 5, 1, 7, 6],
+        DEFGHIJK: [1, 3, 6, 0, 4, 2, 5, 7],
+        DEFGHIJL: [1, 3, 6, 0, 4, 2, 7, 5],
+        DEFGHIKL: [1, 3, 5, 0, 4, 2, 7, 6],
+        DEFGHJKL: [1, 3, 5, 0, 4, 2, 7, 6],
+        DEFGIJKL: [1, 3, 4, 0, 5, 2, 7, 6],
+        DEFHIJKL: [1, 5, 4, 0, 3, 2, 7, 6],
+        DEGHIJKL: [1, 5, 4, 0, 3, 2, 7, 6],
+        DFGHIJKL: [3, 2, 4, 0, 5, 1, 7, 6],
+        EFGHIJKL: [0, 5, 4, 1, 3, 2, 7, 6],
+      };
+
+      const thirdPlacedTeams = getBestTeamsOfRank(3, 8, "roundOf32").sort(
+        (a, b) => a.group.charCodeAt() - b.group.charCodeAt(),
+      );
+      const thirdPlaceQualifierGroups = thirdPlacedTeams.reduce(
+        (acc, { group }) => acc + group,
+        "",
+      );
+      const scenarioIndices = matchupIndices[thirdPlaceQualifierGroups];
+
       const knockouts = [];
-
-      getBestTeamsOfRank(3, 0, "roundOf16");
-
       knockouts.push([
-        getTeamFromStandings("A", 1),
+        getTeamFromStandings("E", 1),
+        thirdPlacedTeams[scenarioIndices[3]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("I", 1),
+        thirdPlacedTeams[scenarioIndices[5]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("A", 2),
         getTeamFromStandings("B", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings("C", 1),
-        getTeamFromStandings("D", 2),
-      ]);
-      knockouts.push([
-        getTeamFromStandings("E", 1),
-        getTeamFromStandings("F", 2),
-      ]);
-      knockouts.push([
-        getTeamFromStandings("G", 1),
-        getTeamFromStandings("H", 2),
-      ]);
-      knockouts.push([
-        getTeamFromStandings("B", 1),
-        getTeamFromStandings("A", 2),
-      ]);
-      knockouts.push([
-        getTeamFromStandings("D", 1),
+        getTeamFromStandings("F", 1),
         getTeamFromStandings("C", 2),
       ]);
       knockouts.push([
-        getTeamFromStandings("F", 1),
-        getTeamFromStandings("E", 2),
+        getTeamFromStandings("K", 2),
+        getTeamFromStandings("L", 2),
       ]);
       knockouts.push([
         getTeamFromStandings("H", 1),
+        getTeamFromStandings("J", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("D", 1),
+        thirdPlacedTeams[scenarioIndices[2]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("G", 1),
+        thirdPlacedTeams[scenarioIndices[4]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("C", 1),
+        getTeamFromStandings("F", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("E", 2),
+        getTeamFromStandings("I", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("A", 1),
+        thirdPlacedTeams[scenarioIndices[0]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("L", 1),
+        thirdPlacedTeams[scenarioIndices[7]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("J", 1),
+        getTeamFromStandings("H", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("D", 2),
         getTeamFromStandings("G", 2),
+      ]);
+      knockouts.push([
+        getTeamFromStandings("B", 1),
+        thirdPlacedTeams[scenarioIndices[1]].team,
+      ]);
+      knockouts.push([
+        getTeamFromStandings("K", 1),
+        thirdPlacedTeams[scenarioIndices[6]].team,
       ]);
 
       return knockouts;
@@ -889,9 +1428,9 @@ const updateStats = (stage) => {
 const simResults = [];
 
 const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
-  const [team1Rating, team2Rating] = teams.map(
-    (team) => simRatings[team].rating + (team === location ? 100 : 0)
-  );
+  const [team1Rating, team2Rating] = teams.map((team) => {
+    return simRatings[team].rating + (team === location ? 100 : 0);
+  });
 
   const [favorite, underdog] =
     team1Rating >= team2Rating ? teams : [...teams].reverse();
@@ -981,13 +1520,48 @@ const locationsEC = [
   "EN",
 ];
 
+let locationsCountWC = 0;
+const locationsWC = [
+  "US",
+  "US",
+  "US",
+  "MX",
+  "CA",
+  "US",
+  "US",
+  "US",
+  "US",
+  "US",
+  "MX",
+  "US",
+  "US",
+  "US",
+  "CA",
+  "US",
+  "US",
+  "US",
+  "US",
+  "US",
+  "US",
+  "MX",
+  "US",
+  "CA",
+  "US",
+  "US",
+  "US",
+  "US",
+  "US",
+  "US",
+  "US",
+];
+
 let knockoutResults = [];
 
 const findActualWinner = ([team1, team2]) => {
   const actualMatch = knockoutResults.find(
     (match) =>
       (match.team1 === team1 && match.team2 === team2) ||
-      (match.team1 === team2 && match.team2 === team1)
+      (match.team1 === team2 && match.team2 === team1),
   );
   if (actualMatch) {
     return actualMatch.goalDifference > 0
@@ -1002,6 +1576,9 @@ const simulateRound = (location, stat) => (acc, teams, idx) => {
   if (tournament === "EC") {
     matchLocation = locationsEC[locationsCountEC % 15];
     locationsCountEC++;
+  }
+  if (tournament === "WC") {
+    matchLocation = locationsWC[locationsCountWC++ % 31];
   }
 
   const winner =
@@ -1045,7 +1622,7 @@ exports.runSimulation = async () => {
     await init(tournament));
 
   knockoutResults = results.filter((match) =>
-    match.date.isSameOrAfter(getKnockoutsStageDate(tournament))
+    match.date.isSameOrAfter(getKnockoutsStageDate(tournament)),
   );
   for (let i = 0; i < knockoutResults.length; i += 1) {
     const { date, team1, team2, goalDifference } = knockoutResults[i];
@@ -1061,10 +1638,10 @@ exports.runSimulation = async () => {
       ].filter((fixture) => fixture.date.isAfter(date));
 
       const fixture1 = searchBase.find((fixture) =>
-        fixture.teams.includes(team1)
+        fixture.teams.includes(team1),
       );
       const fixture2 = searchBase.find((fixture) =>
-        fixture.teams.includes(team2)
+        fixture.teams.includes(team2),
       );
 
       if (!fixture1 !== !fixture2) {
@@ -1075,7 +1652,7 @@ exports.runSimulation = async () => {
         }
       } else {
         const winner = await askQuestion(
-          `Enter the winner:\n1) ${team1}\n2) ${team2}\n`
+          `Enter the winner:\n1) ${team1}\n2) ${team2}\n`,
         );
         switch (winner) {
           case "1":
@@ -1150,8 +1727,16 @@ exports.runSimulation = async () => {
       case "AC":
       case "AR":
       case "EC":
+        simulateKnockouts(playoffs, [
+          "quarterfinals",
+          "semifinals",
+          "final",
+          "champions",
+        ]);
+        break;
       case "WC":
         simulateKnockouts(playoffs, [
+          "roundOf16",
           "quarterfinals",
           "semifinals",
           "final",

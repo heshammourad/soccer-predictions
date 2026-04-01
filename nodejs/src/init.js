@@ -1,33 +1,33 @@
-const moment = require('moment');
+const moment = require("moment");
 
-const { lineBreak } = require('./configuration');
+const { lineBreak } = require("./configuration");
 const {
   getKnockoutsStageDate,
   dataFiles,
   fetchData,
-  readFile
-} = require('./data');
-const { updateStandings } = require('./utils');
+  readFile,
+} = require("./data");
+const { updateStandings } = require("./utils");
 
 const loadFixtures = async (tournamentCode) => {
   const fixturesData = await fetchData(
     `${dataFiles[tournamentCode]}fixtures`,
-    `${tournamentCode}/fixtures`
+    `${tournamentCode}/fixtures`,
   );
 
-  const fixtures = fixturesData.split('\\n').reduce((acc, fixtureData) => {
-    const fields = fixtureData.split('\\t');
+  const fixtures = fixturesData.split("\\n").reduce((acc, fixtureData) => {
+    const fields = fixtureData.split("\\t");
 
     const fixtureTournament = fields[5];
     if (fixtureTournament === tournamentCode) {
-      const fixtureDate = moment(fields.slice(0, 3).join('-'), 'YYYY-MM-DD');
+      const fixtureDate = moment(fields.slice(0, 3).join("-"), "YYYY-MM-DD");
       acc.push({
         teams: [fields[3], fields[4]],
         location: fields[6],
         date: fixtureDate,
-        isKnockout: tournamentCode !== 'EQ' && fixtureDate.isSameOrAfter(
-          getKnockoutsStageDate(tournamentCode)
-        )
+        isKnockout:
+          tournamentCode !== "EQ" &&
+          fixtureDate.isSameOrAfter(getKnockoutsStageDate(tournamentCode)),
       });
     }
     return acc;
@@ -44,7 +44,7 @@ const loadStandings = async (tournamentCode) => {
         goalsFor: 0,
         goalDifference: 0,
         group,
-        points: 0
+        points: 0,
       };
       return tAcc;
     }, {});
@@ -53,15 +53,15 @@ const loadStandings = async (tournamentCode) => {
 
   const resultsData = await fetchData(
     `${dataFiles[tournamentCode]}latest`,
-    `${tournamentCode}/results`
+    `${tournamentCode}/results`,
   );
 
-  const results = resultsData.split('\\n').reduce((acc, line) => {
-    const fields = line.split('\\t');
+  const results = resultsData.split("\\n").reduce((acc, line) => {
+    const fields = line.split("\\t");
 
     const resultTournament = fields[7];
     if (resultTournament === tournamentCode) {
-      const date = moment(fields.slice(0, 3).join(''), 'YYYY-MM-DD');
+      const date = moment(fields.slice(0, 3).join(""), "YYYY-MM-DD");
       const team1 = fields[3];
       const team2 = fields[4];
       const score1 = fields[5];
@@ -85,9 +85,9 @@ const loadStandings = async (tournamentCode) => {
 const loadTeams = async () => {
   const ratings = await fetchData(dataFiles.ratings, dataFiles.teamRatings);
 
-  const ratingsData = ratings.split('\\n');
+  const ratingsData = ratings.split("\\n");
   const teamRatings = ratingsData.reduce((acc, teamData) => {
-    const teamDataFields = teamData.split('\\t');
+    const teamDataFields = teamData.split("\\t");
 
     const code = teamDataFields[2];
     const rating = parseInt(teamDataFields[3], 10);
@@ -99,7 +99,7 @@ const loadTeams = async () => {
   const teamsData = readFile(dataFiles.teamNames).toString().split(lineBreak);
   const teamNames = teamsData.reduce((acc, teamData) => {
     if (teamData) {
-      const [code, name] = teamData.split(',');
+      const [code, name] = teamData.split(",");
       acc[code] = name;
     }
     return acc;
@@ -108,7 +108,7 @@ const loadTeams = async () => {
   return Object.entries(teamRatings).reduce((acc, [code, rating]) => {
     acc[code] = {
       name: teamNames[code],
-      rating
+      rating,
     };
     return acc;
   }, {});
@@ -118,13 +118,13 @@ exports.init = async (tournamentCode) => {
   const [fixtures, { results, standings }, teamRatings] = await Promise.all([
     loadFixtures(tournamentCode),
     loadStandings(tournamentCode),
-    loadTeams()
+    loadTeams(),
   ]);
 
   let nationsLeagueStandings;
-  if (tournamentCode === 'EQ') {
+  if (tournamentCode === "EQ") {
     nationsLeagueStandings = JSON.parse(
-      readFile(dataFiles.nationsLeagueStandings)
+      readFile(dataFiles.nationsLeagueStandings),
     );
   }
 
