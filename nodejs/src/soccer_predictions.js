@@ -1,6 +1,6 @@
 const partition = require("lodash.partition");
 const sampleSize = require("lodash.samplesize");
-const { simulations, tournament } = require("./configuration");
+const { simulations, tournament, calculateScoreBreakdowns = true } = require("./configuration");
 const { getKnockoutsStageDate } = require("./data");
 const { init } = require("./init");
 const { getLowerScore, getWeight, simulateResult } = require("./simulation");
@@ -24,6 +24,8 @@ let standings;
 let teamRatings;
 
 let simRatings;
+let groupFixtures;
+let fixtureScoreCounts;
 
 const resetRatings = () => {
   simRatings = Object.entries(teamRatings).reduce((acc, [team, info]) => {
@@ -281,6 +283,18 @@ const sortStats =
 
 let stats;
 
+const getMostCommon = (countsObj) => {
+  let maxKey = null;
+  let maxCount = -1;
+  for (const [key, count] of Object.entries(countsObj || {})) {
+    if (count > maxCount) {
+      maxCount = count;
+      maxKey = key;
+    }
+  }
+  return { key: maxKey, count: maxCount };
+};
+
 const printStats = () => {
   const statPrint = Object.entries(stats).reduce((acc, [group, teams]) => {
     acc += `Group ${group}:\n`;
@@ -308,6 +322,50 @@ const printStats = () => {
   }, "");
 
   console.log(statPrint);
+
+  if (groupFixtures && fixtureScoreCounts) {
+    let matchesPrint = "\nSuggested Match Scores:\n";
+    const matchesByGroup = {};
+    groupFixtures.forEach((fixture, index) => {
+      const team1 = fixture.teams[0];
+      const group = standings[team1] ? standings[team1].group : "Unknown";
+      if (!matchesByGroup[group]) {
+        matchesByGroup[group] = [];
+      }
+      matchesByGroup[group].push({ fixture, index });
+    });
+
+    for (const [group, items] of Object.entries(matchesByGroup).sort()) {
+      matchesPrint += `Group ${group}:\n`;
+      items.forEach(({ fixture, index }) => {
+        const [team1, team2] = fixture.teams;
+        const team1Name = teamRatings[team1]?.name || team1;
+        const team2Name = teamRatings[team2]?.name || team2;
+
+        const scoreCounts = fixtureScoreCounts[index]?.scores || {};
+        const marginCounts = fixtureScoreCounts[index]?.margins || {};
+
+        const { key: bestScore, count: bestScoreCount } = getMostCommon(scoreCounts);
+        const { key: bestMarginStr, count: bestMarginCount } = getMostCommon(marginCounts);
+
+        const scorePercent = Math.round((bestScoreCount / simulations) * 100);
+        const marginPercent = Math.round((bestMarginCount / simulations) * 100);
+
+        let marginText = "Draw";
+        if (bestMarginStr !== null) {
+          const bestMargin = parseInt(bestMarginStr, 10);
+          if (bestMargin > 0) {
+            marginText = `${team1Name} +${bestMargin}`;
+          } else if (bestMargin < 0) {
+            marginText = `${team2Name} +${Math.abs(bestMargin)}`;
+          }
+        }
+
+        matchesPrint += `  ${team1Name} vs ${team2Name}: ${bestScore || "N/A"} (${scorePercent}%) | Margin: ${marginText} (${marginPercent}%)\n`;
+      });
+    }
+    console.log(matchesPrint);
+  }
 };
 
 const addStat = (team, ...statList) => {
@@ -1427,7 +1485,7 @@ const updateStats = (stage) => {
 
 const simResults = [];
 
-const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
+const simulateMatch = ({ location, teams, isPenaltyShootout, fixtureIndex }) => {
   const [team1Rating, team2Rating] = teams.map((team) => {
     return simRatings[team].rating + (team === location ? 100 : 0);
   });
@@ -1456,6 +1514,22 @@ const simulateMatch = ({ location, teams, isPenaltyShootout }) => {
     } else {
       favoriteGoals = higherScore;
       underdogGoals = lowerScore;
+    }
+
+    if (fixtureIndex !== undefined && fixtureScoreCounts) {
+      const team1Goals = favorite === teams[0] ? favoriteGoals : underdogGoals;
+      const team2Goals = favorite === teams[0] ? underdogGoals : favoriteGoals;
+      const scoreKey = `${team1Goals}-${team2Goals}`;
+      const marginKey = team1Goals - team2Goals;
+
+      if (!fixtureScoreCounts[fixtureIndex].scores) {
+        fixtureScoreCounts[fixtureIndex].scores = {};
+        fixtureScoreCounts[fixtureIndex].margins = {};
+      }
+      fixtureScoreCounts[fixtureIndex].scores[scoreKey] =
+        (fixtureScoreCounts[fixtureIndex].scores[scoreKey] || 0) + 1;
+      fixtureScoreCounts[fixtureIndex].margins[marginKey] =
+        (fixtureScoreCounts[fixtureIndex].margins[marginKey] || 0) + 1;
     }
 
     updateStandings(simStandings, favorite, favoriteGoals, underdogGoals);
@@ -1679,16 +1753,21 @@ exports.runSimulation = async () => {
     return acc;
   }, {});
 
+  groupFixtures = fixtures.filter(({ isKnockout }) => !isKnockout);
+  if (calculateScoreBreakdowns) {
+    fixtureScoreCounts = groupFixtures.map(() => ({}));
+  } else {
+    fixtureScoreCounts = undefined;
+  }
+
   for (let sim = 0; sim < simulations; sim++) {
     simResults.splice(0);
     resetRatings();
     resetStandings();
 
-    fixtures
-      .filter(({ isKnockout }) => !isKnockout)
-      .forEach((fixture) => {
-        simulateMatch({ ...fixture });
-      });
+    groupFixtures.forEach((fixture, index) => {
+      simulateMatch({ ...fixture, fixtureIndex: index });
+    });
 
     const playoffs = updateStats(tournament);
 
