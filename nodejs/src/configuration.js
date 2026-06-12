@@ -1,6 +1,6 @@
 module.exports = {
   cacheFileDuration: [1, "day"],
-  calculateScoreBreakdowns: false,
+  calculateScoreBreakdowns: true,
   dataPath: "./data/",
   forceReload: true,
   lineBreak: "\n",

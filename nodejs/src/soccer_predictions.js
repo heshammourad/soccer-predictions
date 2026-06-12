@@ -361,7 +361,25 @@ const printStats = () => {
           }
         }
 
-        matchesPrint += `  ${team1Name} vs ${team2Name}: ${bestScore || "N/A"} (${scorePercent}%) | Margin: ${marginText} (${marginPercent}%)\n`;
+        let team1WinCount = 0;
+        let drawCount = 0;
+        let team2WinCount = 0;
+        for (const [marginStr, count] of Object.entries(marginCounts)) {
+          const margin = parseInt(marginStr, 10);
+          if (margin > 0) {
+            team1WinCount += count;
+          } else if (margin === 0) {
+            drawCount += count;
+          } else if (margin < 0) {
+            team2WinCount += count;
+          }
+        }
+
+        const team1WinPercent = Math.round((team1WinCount / simulations) * 100);
+        const drawPercent = Math.round((drawCount / simulations) * 100);
+        const team2WinPercent = Math.round((team2WinCount / simulations) * 100);
+
+        matchesPrint += `  ${team1Name} vs ${team2Name}: ${bestScore || "N/A"} (${scorePercent}%) | Margin: ${marginText} (${marginPercent}%) | ${team1Name} Win (${team1WinPercent}%) Draw (${drawPercent}%) ${team2Name} Win (${team2WinPercent}%)\n`;
       });
     }
     console.log(matchesPrint);
