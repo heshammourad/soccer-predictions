@@ -54,9 +54,21 @@ exports.fetchData = async (pathname, cacheFile) => {
   if (forceReload || this.isFileCacheExpired(cacheFile)) {
     const timestamp = Date.now();
     const url = `http://eloratings.net/${pathname}.tsv?_=${timestamp}`;
-
-    const { data } = await axios.get(url);
-    this.writeFile(cacheFile, data);
+    try {
+      const { data } = await axios.get(url);
+      if (
+        typeof data === "string" &&
+        !data.includes("Imunify360") &&
+        !data.includes("<html>") &&
+        !data.includes("<!DOCTYPE")
+      ) {
+        this.writeFile(cacheFile, data);
+      } else {
+        console.warn(`[fetchData] Warning: Invalid data format fetched from ${url}. Falling back to cached file.`);
+      }
+    } catch (error) {
+      console.warn(`[fetchData] Warning: Failed to fetch from web (${error.message}). Falling back to cached file.`);
+    }
   }
 
   return this.readFile(cacheFile);
