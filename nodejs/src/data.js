@@ -34,8 +34,8 @@ const knockoutStageDates = {
 
 exports.getKnockoutsStageDate = (tournament) => knockoutStageDates[tournament];
 
-exports.readFile = (filename) =>
-  fs.readFileSync(`${dataPath}${filename}`, "latin1");
+exports.readFile = (filename, encoding = "latin1") =>
+  fs.readFileSync(`${dataPath}${filename}`, encoding);
 
 exports.writeFile = (filename, data) =>
   fs.writeFileSync(`${dataPath}${filename}`, JSON.stringify(data), {

@@ -96,7 +96,7 @@ const loadTeams = async () => {
     return acc;
   }, {});
 
-  const teamsData = readFile(dataFiles.teamNames).toString().split(lineBreak);
+  const teamsData = readFile(dataFiles.teamNames, "utf8").toString().split(lineBreak);
   const teamNames = teamsData.reduce((acc, teamData) => {
     if (teamData) {
       const [code, name] = teamData.split(",");
