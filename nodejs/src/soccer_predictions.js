@@ -26,6 +26,7 @@ let teamRatings;
 let simRatings;
 let groupFixtures;
 let fixtureScoreCounts;
+const simResults = [];
 
 const resetRatings = () => {
   simRatings = Object.entries(teamRatings).reduce((acc, [team, info]) => {
@@ -63,7 +64,7 @@ const resetStandings = () => {
   }, {});
 };
 
-const sortFunction = (a, b) => {
+const compareStats = (a, b) => {
   if (a.points !== b.points) {
     return b.points - a.points;
   }
@@ -72,6 +73,14 @@ const sortFunction = (a, b) => {
   }
   if (a.goalsFor !== b.goalsFor) {
     return b.goalsFor - a.goalsFor;
+  }
+  return 0;
+};
+
+const sortFunction = (a, b) => {
+  const diff = compareStats(a, b);
+  if (diff !== 0) {
+    return diff;
   }
   return Math.random() - 0.5;
 };
@@ -93,11 +102,172 @@ const convertStandingsToArray = (standingsToConvert) => {
   return standingsArray;
 };
 
+const getGroupMatchResult = (teamA, teamB) => {
+  // First, check simulated results
+  let match = simResults.find(
+    (m) =>
+      (m.team1 === teamA && m.team2 === teamB) ||
+      (m.team1 === teamB && m.team2 === teamA),
+  );
+  if (match) {
+    return match;
+  }
+  // Second, check real results (played group stage matches)
+  match = results.find(
+    (m) =>
+      m.date.isBefore(getKnockoutsStageDate(tournament)) &&
+      ((m.team1 === teamA && m.team2 === teamB) ||
+        (m.team1 === teamB && m.team2 === teamA)),
+  );
+  return match;
+};
+
+const sortGroupTeamsWithH2H = (teams) => {
+  const overallStatsMap = {};
+  teams.forEach((tObj) => {
+    overallStatsMap[tObj.team] = tObj;
+  });
+
+  const getH2HStats = (subset) => {
+    const stats = {};
+    subset.forEach((team) => {
+      stats[team] = { points: 0, goalDifference: 0, goalsFor: 0 };
+    });
+
+    for (let i = 0; i < subset.length; i++) {
+      for (let j = i + 1; j < subset.length; j++) {
+        const teamA = subset[i];
+        const teamB = subset[j];
+        const match = getGroupMatchResult(teamA, teamB);
+        if (match) {
+          let scoreA, scoreB;
+          if (match.team1 === teamA) {
+            scoreA = match.score1;
+            scoreB = match.score2;
+          } else {
+            scoreA = match.score2;
+            scoreB = match.score1;
+          }
+
+          if (scoreA > scoreB) {
+            stats[teamA].points += 3;
+          } else if (scoreB > scoreA) {
+            stats[teamB].points += 3;
+          } else {
+            stats[teamA].points += 1;
+            stats[teamB].points += 1;
+          }
+
+          stats[teamA].goalsFor += scoreA;
+          stats[teamA].goalDifference += (scoreA - scoreB);
+
+          stats[teamB].goalsFor += scoreB;
+          stats[teamB].goalDifference += (scoreB - scoreA);
+        }
+      }
+    }
+    return stats;
+  };
+
+  const resolveTie = (subset) => {
+    if (subset.length <= 1) {
+      return subset;
+    }
+
+    const h2hStats = getH2HStats(subset);
+
+    const sortedSubset = [...subset].sort((a, b) => {
+      return compareStats(h2hStats[a], h2hStats[b]);
+    });
+
+    const groups = [];
+    let currentGroup = [sortedSubset[0]];
+
+    for (let i = 1; i < sortedSubset.length; i++) {
+      const prev = sortedSubset[i - 1];
+      const curr = sortedSubset[i];
+      const statsPrev = h2hStats[prev];
+      const statsCurr = h2hStats[curr];
+
+      if (
+        statsPrev.points === statsCurr.points &&
+        statsPrev.goalDifference === statsCurr.goalDifference &&
+        statsPrev.goalsFor === statsCurr.goalsFor
+      ) {
+        currentGroup.push(curr);
+      } else {
+        groups.push(currentGroup);
+        currentGroup = [curr];
+      }
+    }
+    groups.push(currentGroup);
+
+    const resolved = [];
+    groups.forEach((group) => {
+      if (group.length === 1) {
+        resolved.push(group[0]);
+      } else if (group.length < subset.length) {
+        const resolvedSub = resolveTie(group);
+        resolved.push(...resolvedSub);
+      } else {
+        const resolvedSub = [...group].sort((a, b) => {
+          return sortFunction(overallStatsMap[a], overallStatsMap[b]);
+        });
+        resolved.push(...resolvedSub);
+      }
+    });
+
+    return resolved;
+  };
+
+  // First sort overall by points descending.
+  const sortedByPoints = [...teams].sort((a, b) => b.points - a.points);
+
+  // Group teams by their points
+  const pointGroups = [];
+  let currentGroup = [sortedByPoints[0]];
+
+  for (let i = 1; i < sortedByPoints.length; i++) {
+    const prev = sortedByPoints[i - 1];
+    const curr = sortedByPoints[i];
+
+    if (prev.points === curr.points) {
+      currentGroup.push(curr);
+    } else {
+      pointGroups.push(currentGroup);
+      currentGroup = [curr];
+    }
+  }
+  pointGroups.push(currentGroup);
+
+  const finalSortedTeams = [];
+  pointGroups.forEach((group) => {
+    if (group.length === 1) {
+      finalSortedTeams.push(group[0]);
+    } else {
+      const subsetCodes = group.map((tObj) => tObj.team);
+      const resolvedCodes = resolveTie(subsetCodes);
+      resolvedCodes.forEach((code) => {
+        finalSortedTeams.push(overallStatsMap[code]);
+      });
+    }
+  });
+
+  // Modify the original teams array in-place
+  for (let i = 0; i < teams.length; i++) {
+    teams[i] = finalSortedTeams[i];
+  }
+};
+
 const sortStandings = () => {
   simStandings = convertStandingsToArray(simStandings);
 
   Object.values(simStandings).forEach((teams) => {
-    teams.sort(sortFunction);
+    if (tournament === "WC") {
+      sortGroupTeamsWithH2H(teams);
+    } else {
+      teams.sort(sortFunction);
+    }
   });
 };
 
@@ -1501,8 +1671,6 @@ const updateStats = (stage) => {
   return null;
 };
 
-const simResults = [];
-
 const simulateMatch = ({ location, teams, isPenaltyShootout, fixtureIndex }) => {
   const [team1Rating, team2Rating] = teams.map((team) => {
     return simRatings[team].rating + (team === location ? 100 : 0);
@@ -1515,12 +1683,6 @@ const simulateMatch = ({ location, teams, isPenaltyShootout, fixtureIndex }) => 
   let result = simulateResult(ratingDifference);
 
   if (!isPenaltyShootout) {
-    simResults.push({
-      team1: favorite,
-      team2: underdog,
-      goalDifference: result,
-    });
-
     const margin = Math.abs(result);
     const lowerScore = getLowerScore(margin);
     const higherScore = margin + lowerScore;
@@ -1533,6 +1695,14 @@ const simulateMatch = ({ location, teams, isPenaltyShootout, fixtureIndex }) => 
       favoriteGoals = higherScore;
       underdogGoals = lowerScore;
     }
+
+    simResults.push({
+      team1: favorite,
+      team2: underdog,
+      goalDifference: result,
+      score1: favoriteGoals,
+      score2: underdogGoals,
+    });
 
     if (fixtureIndex !== undefined && fixtureScoreCounts) {
       const team1Goals = favorite === teams[0] ? favoriteGoals : underdogGoals;

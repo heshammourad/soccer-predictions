@@ -74,7 +74,14 @@ const loadStandings = async (tournamentCode) => {
         updateStandings(standings, team2, score2, score1);
       }
 
-      acc.push({ date, team1, team2, goalDifference });
+      acc.push({
+        date,
+        team1,
+        team2,
+        goalDifference,
+        score1: parseInt(score1, 10) || 0,
+        score2: parseInt(score2, 10) || 0,
+      });
     }
     return acc;
   }, []);
