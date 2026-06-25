@@ -1,6 +1,14 @@
-const axios = require("axios");
+const { Session, ClientIdentifier, initTLS } = require("node-tls-client");
 const fs = require("fs");
 const moment = require("moment");
+
+let tlsInitialized = null;
+const ensureTlsInitialized = async () => {
+  if (!tlsInitialized) {
+    tlsInitialized = initTLS();
+  }
+  return tlsInitialized;
+};
 
 const { cacheFileDuration, dataPath, forceReload } = require("./configuration");
 
@@ -54,20 +62,37 @@ exports.fetchData = async (pathname, cacheFile) => {
   if (forceReload || this.isFileCacheExpired(cacheFile)) {
     const timestamp = Date.now();
     const url = `http://eloratings.net/${pathname}.tsv?_=${timestamp}`;
+    let session;
     try {
-      const { data } = await axios.get(url);
-      if (
-        typeof data === "string" &&
-        !data.includes("Imunify360") &&
-        !data.includes("<html>") &&
-        !data.includes("<!DOCTYPE")
-      ) {
-        this.writeFile(cacheFile, data);
+      await ensureTlsInitialized();
+      session = new Session({
+        clientIdentifier: ClientIdentifier.chrome_120,
+        timeout: 10000,
+      });
+
+      const response = await session.get(url);
+
+      if (response.status === 200) {
+        const data = await response.text();
+        if (
+          typeof data === "string" &&
+          !data.includes("Imunify360") &&
+          !data.includes("<html>") &&
+          !data.includes("<!DOCTYPE")
+        ) {
+          this.writeFile(cacheFile, data);
+        } else {
+          console.warn(`[fetchData] Warning: Invalid data format fetched from ${url}. Falling back to cached file.`);
+        }
       } else {
-        console.warn(`[fetchData] Warning: Invalid data format fetched from ${url}. Falling back to cached file.`);
+        console.warn(`[fetchData] Warning: Received status ${response.status} from ${url}. Falling back to cached file.`);
       }
     } catch (error) {
       console.warn(`[fetchData] Warning: Failed to fetch from web (${error.message}). Falling back to cached file.`);
+    } finally {
+      if (session) {
+        await session.close().catch(() => {});
+      }
     }
   }
 

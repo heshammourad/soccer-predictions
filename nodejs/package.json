@@ -11,10 +11,10 @@
   "dependencies": {
     "lodash.groupby": "^4.6.0",
     "lodash.partition": "^4.6.0",
-    "lodash.samplesize": "^4.2.0"
+    "lodash.samplesize": "^4.2.0",
+    "node-tls-client": "^2.1.0"
   },
   "devDependencies": {
-    "axios": "^0.21.4",
     "moment": "^2.29.2"
   }
 }
