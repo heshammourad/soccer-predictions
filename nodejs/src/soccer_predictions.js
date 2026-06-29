@@ -361,80 +361,87 @@ const evaluatedStats = {
   },
 };
 
+const groupStandingsKeys = ["first", "second", "third", "fourth"];
+
+const getSortOrder = (t) => {
+  const order = [];
+
+  switch (t) {
+    case "EQ":
+      order.push(
+        "totalQualify",
+        "qualifyFromGroup",
+        "qualifyFromPlayoffs",
+        "qualifyToPlayoffs",
+      );
+      break;
+    case "CA":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "first",
+        "second",
+        "third",
+        "fourth",
+      );
+      break;
+    case "AC":
+    case "AR":
+    case "EC":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "roundOf16",
+        "first",
+        "second",
+        "third",
+      );
+      break;
+    case "ARC":
+    case "CCH":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "first",
+        "second",
+      );
+      break;
+    case "CLA":
+      order.push("champions", "finals", "!relegated");
+      break;
+    case "CLB":
+      order.push("promoted", "!relegated");
+      break;
+    case "CLC":
+      order.push("promoted");
+      break;
+    case "WC":
+      order.push(
+        "champions",
+        "final",
+        "semifinals",
+        "quarterfinals",
+        "roundOf16",
+        "roundOf32",
+        "first",
+      );
+      break;
+    default:
+      break;
+  }
+  return order;
+};
+
 const sortStats =
   (t) =>
   ([teamA, totalsA], [teamB, totalsB]) => {
-    const order = [];
-
-    switch (t) {
-      case "EQ": {
-        order.push(
-          "totalQualify",
-          "qualifyFromGroup",
-          "qualifyFromPlayoffs",
-          "qualifyToPlayoffs",
-        );
-        break;
-      }
-      case "CA":
-        order.push(
-          "champions",
-          "final",
-          "semifinals",
-          "quarterfinals",
-          "first",
-          "second",
-          "third",
-          "fourth",
-        );
-        break;
-      case "AC":
-      case "AR":
-      case "EC":
-        order.push(
-          "champions",
-          "final",
-          "semifinals",
-          "quarterfinals",
-          "roundOf16",
-          "first",
-          "second",
-          "third",
-        );
-        break;
-      case "ARC":
-      case "CCH":
-        order.push(
-          "champions",
-          "final",
-          "semifinals",
-          "quarterfinals",
-          "first",
-          "second",
-        );
-        break;
-      case "CLA":
-        order.push("champions", "finals", "!relegated");
-        break;
-      case "CLB":
-        order.push("promoted", "!relegated");
-        break;
-      case "CLC":
-        order.push("promoted");
-        break;
-      case "WC":
-        order.push(
-          "champions",
-          "final",
-          "semifinals",
-          "quarterfinals",
-          "roundOf16",
-          "roundOf32",
-          "first",
-        );
-      default:
-        break;
-    }
+    const order = getSortOrder(t);
 
     for (let stat of order) {
       if (stat.startsWith("!")) {
@@ -466,34 +473,86 @@ const getMostCommon = (countsObj) => {
 };
 
 const printStats = () => {
-  const statPrint = Object.entries(stats).reduce((acc, [group, teams]) => {
-    acc += `Group ${group}:\n`;
+  const allGroupMatchesSimulated = !groupFixtures || groupFixtures.length === 0;
 
-    acc += Object.entries(teams)
-      .sort(sortStats(tournament))
-      .reduce((tAcc, [team, totals]) => {
-        const [, { name }] = Object.entries(teamRatings).find(
-          ([code]) => code === team,
-        );
-        tAcc += `${name}`;
+  let statPrint = "";
+  if (allGroupMatchesSimulated) {
+    const allTeamsStats = [];
+    Object.entries(stats).forEach(([group, teams]) => {
+      Object.entries(teams).forEach(([team, totals]) => {
+        allTeamsStats.push({ team, totals });
+      });
+    });
 
-        const valuePrint = Object.values(totals).reduce((vAcc, total) => {
+    const order = getSortOrder(tournament);
+    const knockoutOrder = order.filter(
+      (key) => !groupStandingsKeys.includes(key)
+    );
+
+    const sortedTeamsStats = allTeamsStats.sort(
+      ({ team: teamA, totals: totalsA }, { team: teamB, totals: totalsB }) => {
+        for (let stat of knockoutOrder) {
+          if (stat.startsWith("!")) {
+            const s = stat.substr(1);
+            if (totalsA[s] !== totalsB[s]) {
+              return totalsA[s] - totalsB[s];
+            }
+          }
+          if (totalsA[stat] !== totalsB[stat]) {
+            return totalsB[stat] - totalsA[stat];
+          }
+        }
+        const nameA = teamRatings[teamA]?.name || teamA;
+        const nameB = teamRatings[teamB]?.name || teamB;
+        return nameA.localeCompare(nameB);
+      }
+    );
+
+    statPrint = sortedTeamsStats.reduce((tAcc, { team, totals }) => {
+      const name = teamRatings[team]?.name || team;
+      tAcc += `${name}`;
+
+      const valuePrint = Object.entries(totals)
+        .filter(([key]) => !groupStandingsKeys.includes(key))
+        .reduce((vAcc, [, total]) => {
           const percentage = Math.round((total / simulations) * 100);
           vAcc += `,${percentage}%`;
 
           return vAcc;
         }, "");
 
-        tAcc += `${valuePrint}\n`;
+      tAcc += `${valuePrint}\n`;
 
-        return tAcc;
-      }, "");
-    return `${acc}`;
-  }, "");
+      return tAcc;
+    }, "");
+  } else {
+    statPrint = Object.entries(stats).reduce((acc, [group, teams]) => {
+      acc += `Group ${group}:\n`;
+
+      acc += Object.entries(teams)
+        .sort(sortStats(tournament))
+        .reduce((tAcc, [team, totals]) => {
+          const name = teamRatings[team]?.name || team;
+          tAcc += `${name}`;
+
+          const valuePrint = Object.values(totals).reduce((vAcc, total) => {
+            const percentage = Math.round((total / simulations) * 100);
+            vAcc += `,${percentage}%`;
+
+            return vAcc;
+          }, "");
+
+          tAcc += `${valuePrint}\n`;
+
+          return tAcc;
+        }, "");
+      return `${acc}`;
+    }, "");
+  }
 
   console.log(statPrint);
 
-  if (groupFixtures && fixtureScoreCounts) {
+  if (groupFixtures && groupFixtures.length > 0 && fixtureScoreCounts) {
     let matchesPrint = "\nSuggested Match Scores:\n";
     const matchesByGroup = {};
     groupFixtures.forEach((fixture, index) => {
