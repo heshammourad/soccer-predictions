@@ -1,6 +1,6 @@
 const partition = require("lodash.partition");
 const sampleSize = require("lodash.samplesize");
-const { simulations, tournament, calculateScoreBreakdowns = true } = require("./configuration");
+const { simulations, tournament, calculateScoreBreakdowns = true, cutoffDate: configCutoffDate } = require("./configuration");
 const { getKnockoutsStageDate } = require("./data");
 const { init } = require("./init");
 const { getLowerScore, getWeight, simulateResult } = require("./simulation");
@@ -1880,8 +1880,14 @@ const simulateKnockouts = (knockouts, stats) => {
 };
 
 exports.runSimulation = async () => {
+  let cutoffDate = configCutoffDate;
+  const dateArgIdx = process.argv.indexOf("--date");
+  if (dateArgIdx !== -1 && process.argv[dateArgIdx + 1]) {
+    cutoffDate = process.argv[dateArgIdx + 1];
+  }
+
   ({ fixtures, nationsLeagueStandings, results, standings, teamRatings } =
-    await init(tournament));
+    await init(tournament, cutoffDate));
 
   knockoutResults = results.filter((match) =>
     match.date.isSameOrAfter(getKnockoutsStageDate(tournament)),

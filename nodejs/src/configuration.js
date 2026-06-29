@@ -2,8 +2,9 @@ module.exports = {
   cacheFileDuration: [1, "day"],
   calculateScoreBreakdowns: false,
   dataPath: "./data/",
-  forceReload: true,
+  forceReload: false,
   lineBreak: "\n",
   simulations: 10000,
   tournament: "WC",
+  cutoffDate: null,
 };

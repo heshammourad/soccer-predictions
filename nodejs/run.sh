@@ -1,2 +1,2 @@
 cd src/
-node -e 'require("./soccer_predictions").runSimulation()'
+node -e 'require("./soccer_predictions").runSimulation()' -- "$@"

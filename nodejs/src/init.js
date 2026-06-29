@@ -81,6 +81,8 @@ const loadStandings = async (tournamentCode) => {
         goalDifference,
         score1: parseInt(score1, 10) || 0,
         score2: parseInt(score2, 10) || 0,
+        location: fields[8],
+        ratingChange: parseInt(fields[9], 10) || 0,
       });
     }
     return acc;
@@ -121,12 +123,77 @@ const loadTeams = async () => {
   }, {});
 };
 
-exports.init = async (tournamentCode) => {
-  const [fixtures, { results, standings }, teamRatings] = await Promise.all([
+exports.init = async (tournamentCode, cutoffDate = null) => {
+  const [fixtures, { results: allResults, standings: allStandings }, teamRatings] = await Promise.all([
     loadFixtures(tournamentCode),
     loadStandings(tournamentCode),
     loadTeams(),
   ]);
+
+  let results = allResults;
+  let standings = allStandings;
+
+  if (cutoffDate) {
+    const cutoff = moment(cutoffDate, "YYYY-MM-DD");
+
+    // 1. Rebuild standings up to cutoff date
+    const groups = JSON.parse(readFile(`${tournamentCode}/groups`));
+    standings = Object.entries(groups).reduce((acc, [group, teams]) => {
+      const groupTeams = teams.reduce((tAcc, team) => {
+        tAcc[team] = {
+          goalsFor: 0,
+          goalDifference: 0,
+          group,
+          points: 0,
+        };
+        return tAcc;
+      }, {});
+      return { ...acc, ...groupTeams };
+    }, {});
+
+    results = [];
+    const postCutoffResults = [];
+
+    allResults.forEach((match) => {
+      if (match.date.isSameOrBefore(cutoff)) {
+        results.push(match);
+        if (match.date.isBefore(getKnockoutsStageDate(tournamentCode))) {
+          updateStandings(standings, match.team1, match.score1, match.score2);
+          updateStandings(standings, match.team2, match.score2, match.score1);
+        }
+      } else {
+        postCutoffResults.push(match);
+      }
+    });
+
+    // 2. Adjust teamRatings to reverse ELO changes of post-cutoff matches
+    postCutoffResults.forEach((match) => {
+      const ratingChange = match.ratingChange;
+      if (ratingChange) {
+        if (teamRatings[match.team1]) {
+          teamRatings[match.team1].rating -= ratingChange;
+        }
+        if (teamRatings[match.team2]) {
+          teamRatings[match.team2].rating += ratingChange;
+        }
+      }
+    });
+
+    // 3. Reschedule post-cutoff group stage matches as fixtures to be simulated
+    postCutoffResults.forEach((match) => {
+      if (match.date.isBefore(getKnockoutsStageDate(tournamentCode))) {
+        fixtures.push({
+          teams: [match.team1, match.team2],
+          location: match.location || "XX",
+          date: match.date,
+          isKnockout: false,
+        });
+      }
+    });
+
+    // 4. Sort fixtures chronologically
+    fixtures.sort((a, b) => a.date.diff(b.date));
+  }
 
   let nationsLeagueStandings;
   if (tournamentCode === "EQ") {
