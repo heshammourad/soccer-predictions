@@ -441,7 +441,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                         </td>
                         {isGroupStage && (
                           <td className="py-3 px-4 text-center font-bold text-slate-400">
-                            Group {p.team.group}
+                            {p.team.group}
                           </td>
                         )}
                         <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">

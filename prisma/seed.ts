@@ -188,6 +188,8 @@ async function main() {
 
           // If date is after knockouts stage start
           const isKnockout = tourney === 'WC' && date >= new Date('2026-06-28');
+          const location = fields[8] && fields[8].trim() ? fields[8].trim() : team1;
+          const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
 
           await prisma.match.create({
             data: {
@@ -198,6 +200,8 @@ async function main() {
               homeGoals: score1,
               awayGoals: score2,
               isKnockout,
+              location,
+              ratingChange
             }
           });
           resultsCount++;
@@ -248,6 +252,7 @@ async function main() {
           }
 
           const isKnockout = tourney === 'WC' && date >= new Date('2026-06-28');
+          const location = fields[6] ? fields[6].trim() : 'XX';
 
           await prisma.match.create({
             data: {
@@ -258,6 +263,8 @@ async function main() {
               homeGoals: null,
               awayGoals: null,
               isKnockout,
+              location,
+              ratingChange: 0
             }
           });
           fixturesCount++;

@@ -116,7 +116,7 @@ async function run() {
         const d = day === '00' ? '15' : day;
         const date = new Date(`${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
 
-        const location = fields[8] ? fields[8].trim() : 'XX';
+        const location = fields[8] && fields[8].trim() ? fields[8].trim() : team1;
         const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
 
         // Check if match already exists
