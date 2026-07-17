@@ -53,12 +53,6 @@ export default function DashboardClient({ activeTournament, predictions, results
 
   const tournamentNames: { [code: string]: string } = {
     WC: 'World Cup 2026',
-    EC: 'Euro 2021',
-    AC: 'Asian Cup 2024',
-    CA: 'Copa America 2021',
-    AR: 'African Nations Cup 2024',
-    ARC: 'Arab Nations Cup 2021',
-    CCH: 'CONCACAF Gold Cup 2023',
   };
 
   const handleTournamentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

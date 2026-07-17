@@ -9,12 +9,6 @@ interface PageProps {
 
 const tournamentNames: { [code: string]: string } = {
   WC: '2026 World Cup',
-  EC: 'Euro 2021',
-  AC: 'Asian Cup 2024',
-  CA: 'Copa America 2021',
-  AR: 'African Nations Cup 2024',
-  ARC: 'Arab Nations Cup 2021',
-  CCH: 'CONCACAF Championship 2023',
 };
 
 export async function generateMetadata({ params }: PageProps) {

@@ -135,7 +135,7 @@ async function main() {
   console.log(`Seeded ${allCodes.length} teams.`);
 
   // 5. Ingest Matches (results and fixtures) for all available tournaments
-  const tournaments = ['WC', 'EC', 'AC', 'CA', 'AR', 'ARC', 'CCH'];
+  const tournaments = ['WC'];
   for (const tourney of tournaments) {
     const tourneyDir = path.join(DATA_DIR, tourney);
     if (!fs.existsSync(tourneyDir)) continue;

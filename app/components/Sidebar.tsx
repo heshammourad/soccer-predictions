@@ -10,12 +10,6 @@ export default function Sidebar() {
 
   const tournaments = [
     { code: 'WC', name: 'World Cup 2026' },
-    { code: 'EC', name: 'Euro 2021' },
-    { code: 'CA', name: 'Copa America 2021' },
-    { code: 'AC', name: 'Asian Cup 2024' },
-    { code: 'AR', name: 'African Nations 2024' },
-    { code: 'ARC', name: 'Arab Nations 2021' },
-    { code: 'CCH', name: 'CONCACAF Gold Cup' },
   ];
 
   const isActive = (path: string) => pathname === path;

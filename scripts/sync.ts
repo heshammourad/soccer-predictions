@@ -99,7 +99,7 @@ async function run() {
       const fields = line.split('\t');
       if (fields.length >= 8) {
         const matchTournament = fields[7].trim();
-        const activeTournaments = ['WC', 'EC', 'AC', 'CA', 'AR', 'ARC', 'CCH'];
+        const activeTournaments = ['WC'];
         if (!activeTournaments.includes(matchTournament)) continue;
 
         const year = fields[0].trim();
