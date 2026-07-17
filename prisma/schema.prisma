@@ -42,6 +42,8 @@ model Match {
   awayGoals      Int?
   isKnockout     Boolean  @default(false)
   winnerOverride String?  // Manual field for penalty shootout winners
+  location       String?  // Match location country code
+  ratingChange   Int      @default(0) // ELO rating change for this match
   
   homeTeam       Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
   awayTeam       Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])

@@ -116,6 +116,9 @@ async function run() {
         const d = day === '00' ? '15' : day;
         const date = new Date(`${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
 
+        const location = fields[8] ? fields[8].trim() : 'XX';
+        const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
+
         // Check if match already exists
         const existing = await prisma.match.findFirst({
           where: {
@@ -129,7 +132,7 @@ async function run() {
         if (existing) {
           await prisma.match.update({
             where: { id: existing.id },
-            data: { homeGoals: score1, awayGoals: score2 }
+            data: { homeGoals: score1, awayGoals: score2, location, ratingChange }
           });
         } else {
           await prisma.match.create({
@@ -140,7 +143,9 @@ async function run() {
               awayTeamId: team2,
               homeGoals: score1,
               awayGoals: score2,
-              isKnockout: date >= new Date('2026-06-28')
+              isKnockout: date >= new Date('2026-06-28'),
+              location,
+              ratingChange
             }
           });
         }

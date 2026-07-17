@@ -75,6 +75,22 @@ export class SimulatorEngine {
       }
     });
 
+    // Reconstruct ELO ratings as of this milestone's date by reversing post-cutoff rating changes
+    const cutOff = this.asOfDate;
+    if (cutOff) {
+      const postCutoffMatches = matches.filter(m => m.date > cutOff);
+      postCutoffMatches.forEach((m) => {
+        if (m.ratingChange) {
+          if (initialEloMap[m.homeTeamId] !== undefined) {
+            initialEloMap[m.homeTeamId] -= m.ratingChange;
+          }
+          if (initialEloMap[m.awayTeamId] !== undefined) {
+            initialEloMap[m.awayTeamId] += m.ratingChange;
+          }
+        }
+      });
+    }
+
     const tournamentTeamIds = Array.from(new Set(matches.flatMap((m) => [m.homeTeamId, m.awayTeamId])));
     const initialStandings: GroupStandings = {};
     
@@ -173,9 +189,10 @@ export class SimulatorEngine {
 
       // A. Simulate group fixtures
       groupMatches.forEach((fixture) => {
-        const homeAdvantage = (this.config.groupStageDefaultLocation === fixture.homeTeamId) ? 100 : 0;
+        const homeAdvantage = (fixture.location === fixture.homeTeamId) ? 100 : 0;
+        const awayAdvantage = (fixture.location === fixture.awayTeamId) ? 100 : 0;
         const homeElo = simElo[fixture.homeTeamId] + homeAdvantage;
-        const awayElo = simElo[fixture.awayTeamId];
+        const awayElo = simElo[fixture.awayTeamId] + awayAdvantage;
 
         const isHomeFav = homeElo >= awayElo;
         const favUnderdogDiff = Math.abs(homeElo - awayElo);
@@ -274,8 +291,9 @@ export class SimulatorEngine {
           } else {
             const location = this.config.getKnockoutMatchLocation(currentStageName, mIdx);
             const homeAdvantage = (location === match.homeTeamId) ? 100 : 0;
+            const awayAdvantage = (location === match.awayTeamId) ? 100 : 0;
             const homeElo = simElo[match.homeTeamId] + homeAdvantage;
-            const awayElo = simElo[match.awayTeamId];
+            const awayElo = simElo[match.awayTeamId] + awayAdvantage;
 
             const isHomeFav = homeElo >= awayElo;
             const favUnderdogDiff = Math.abs(homeElo - awayElo);
@@ -433,7 +451,9 @@ export class SimulatorEngine {
       awayTeamId: m.awayTeamId,
       homeGoals: m.homeGoals,
       awayGoals: m.awayGoals,
-      isKnockout: m.isKnockout
+      isKnockout: m.isKnockout,
+      location: m.location,
+      ratingChange: m.ratingChange
     };
   }
 }

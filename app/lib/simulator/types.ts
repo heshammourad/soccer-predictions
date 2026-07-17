@@ -29,6 +29,8 @@ export interface Match {
   homeGoals: number | null;
   awayGoals: number | null;
   isKnockout: boolean;
+  location: string | null;
+  ratingChange: number;
 }
 
 export interface Matchup {
