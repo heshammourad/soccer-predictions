@@ -55,8 +55,11 @@ async function run() {
       if (fields.length >= 18) {
         const code = fields[2].trim();
         const rating = parseInt(fields[3].trim(), 10);
-        const rankChange = parseInt(fields[14].trim(), 10);
-        const eloChange = parseInt(fields[15].trim(), 10);
+        const cleanRankChange = fields[14].replace(/[\u0012\x12\u2212]/g, '-').trim();
+        const cleanEloChange = fields[15].replace(/[\u0012\x12\u2212]/g, '-').trim();
+        
+        const rankChange = parseInt(cleanRankChange, 10);
+        const eloChange = parseInt(cleanEloChange, 10);
         
         if (code && !isNaN(rating)) {
           const confederation = confederationsMap[code] || null;
