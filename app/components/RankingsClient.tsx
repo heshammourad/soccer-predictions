@@ -152,12 +152,12 @@ export default function RankingsClient({ teams }: Props) {
 
                     {/* Flag */}
                     <td className="py-3.5 px-6">
-                      <div className="h-6 w-8 rounded overflow-hidden border border-slate-800 relative bg-slate-950 flex items-center justify-center">
+                      <div className="h-5 flex items-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={getFlagUrl(t.id)}
                           alt={`${t.name} flag`}
-                          className="object-cover h-full w-full"
+                          className="h-5 w-auto max-w-[36px] rounded-sm shadow-sm border border-slate-800/50"
                           loading="lazy"
                         />
                       </div>
