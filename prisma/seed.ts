@@ -37,7 +37,7 @@ function readDataFile(filePath: string): string {
 
 async function main() {
   console.log('Clearing database tables...');
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Prediction", "Match", "Team" CASCADE;');
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Prediction", "Match", "Team", "SimulationRun" CASCADE;');
 
   const confederationsPath = path.join(__dirname, '../app/lib/simulator/config/confederations.json');
   const confederationsMap: { [code: string]: string } = fs.existsSync(confederationsPath)

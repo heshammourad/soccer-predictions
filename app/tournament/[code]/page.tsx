@@ -29,14 +29,21 @@ export default async function Page({ params }: PageProps) {
     return notFound();
   }
 
-  // 1. Fetch predictions with team info from Neon DB
-  const predictions = await prisma.prediction.findMany({
+  // 1. Fetch simulation runs with predictions and team info from Neon DB
+  const simulationRuns = await prisma.simulationRun.findMany({
     where: { tournament: activeCode },
     include: {
-      team: true,
+      predictions: {
+        include: {
+          team: true,
+        },
+        orderBy: {
+          champions: 'desc',
+        },
+      },
     },
     orderBy: {
-      champions: 'desc',
+      createdAt: 'asc',
     },
   });
 
@@ -94,7 +101,7 @@ export default async function Page({ params }: PageProps) {
         <div className="mt-8">
           <DashboardClient
             activeTournament={activeCode}
-            predictions={JSON.parse(JSON.stringify(predictions))}
+            simulationRuns={JSON.parse(JSON.stringify(simulationRuns))}
             results={JSON.parse(JSON.stringify(results))}
             fixtures={JSON.parse(JSON.stringify(fixtures))}
           />

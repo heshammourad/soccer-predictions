@@ -5,10 +5,19 @@ import { simulateResult, getLowerScore, calculateRatingChange } from './math';
 export class SimulatorEngine {
   private config: TournamentConfig;
   private simulationsCount: number;
+  private asOfDate?: Date;
+  private description: string;
 
-  constructor(config: TournamentConfig, simulationsCount: number = 10000) {
+  constructor(
+    config: TournamentConfig,
+    simulationsCount: number = 10000,
+    asOfDate?: Date,
+    description: string = 'Current Projections'
+  ) {
     this.config = config;
     this.simulationsCount = simulationsCount;
+    this.asOfDate = asOfDate;
+    this.description = description;
   }
 
   async runSimulation() {
@@ -21,11 +30,39 @@ export class SimulatorEngine {
       orderBy: { date: 'asc' },
     });
 
-    const results = matches.filter((m) => m.homeGoals !== null).map(m => this.mapMatchPrismaToLocal(m));
-    const fixtures = matches.filter((m) => m.homeGoals === null).map(m => this.mapMatchPrismaToLocal(m));
+    const results = matches.filter((m) => {
+      const isCompleted = m.homeGoals !== null;
+      if (!isCompleted) return false;
+      if (this.asOfDate) {
+        return m.date <= this.asOfDate;
+      }
+      return true;
+    }).map(m => this.mapMatchPrismaToLocal(m));
+
+    const fixtures = matches.filter((m) => {
+      const isCompleted = m.homeGoals !== null;
+      if (!isCompleted) return true;
+      if (this.asOfDate) {
+        return m.date > this.asOfDate;
+      }
+      return false;
+    }).map(m => {
+      const local = this.mapMatchPrismaToLocal(m);
+      if (this.asOfDate && m.date > this.asOfDate) {
+        local.homeGoals = null;
+        local.awayGoals = null;
+      }
+      return local;
+    });
 
     const groupMatches = fixtures.filter((m) => !m.isKnockout);
-    const knockoutMatches = matches.filter((m) => m.isKnockout).map(m => this.mapMatchPrismaToLocal(m));
+    const knockoutMatches = matches.filter((m) => {
+      if (!m.isKnockout) return false;
+      if (this.asOfDate) {
+        return m.date <= this.asOfDate;
+      }
+      return true;
+    }).map(m => this.mapMatchPrismaToLocal(m));
 
     // Maps ELO and basic fields
     const initialEloMap: { [teamId: string]: number } = {};
@@ -261,10 +298,26 @@ export class SimulatorEngine {
     }
 
     // 4. Save results
-    console.log(`Writing simulation results to database for ${this.config.code}...`);
+    console.log(`Writing simulation results to database for ${this.config.code} (${this.description})...`);
 
-    await prisma.prediction.deleteMany({
-      where: { tournament: this.config.code },
+    const existingRun = await prisma.simulationRun.findFirst({
+      where: {
+        tournament: this.config.code,
+        description: this.description,
+      },
+    });
+
+    if (existingRun) {
+      await prisma.simulationRun.delete({
+        where: { id: existingRun.id },
+      });
+    }
+
+    const run = await prisma.simulationRun.create({
+      data: {
+        tournament: this.config.code,
+        description: this.description,
+      },
     });
 
     for (const [teamId, totals] of Object.entries(accumulator)) {
@@ -275,6 +328,7 @@ export class SimulatorEngine {
 
       await prisma.prediction.create({
         data: {
+          simulationRunId: run.id,
           teamId,
           tournament: this.config.code,
           champions,
@@ -285,7 +339,7 @@ export class SimulatorEngine {
       });
     }
 
-    console.log(`Successfully completed all simulations for ${this.config.code}.`);
+    console.log(`Successfully completed all simulations for ${this.config.code} (${this.description}).`);
   }
 
   private findTeamInStandings(standings: GroupStandings, teamId: string): TeamStats | null {

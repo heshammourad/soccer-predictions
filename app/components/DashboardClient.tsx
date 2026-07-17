@@ -36,18 +36,34 @@ interface Match {
   awayTeam: Team;
 }
 
+interface SimulationRun {
+  id: number;
+  tournament: string;
+  createdAt: string;
+  description: string;
+  predictions: Prediction[];
+}
+
 interface Props {
   activeTournament: string;
-  predictions: Prediction[];
+  simulationRuns: SimulationRun[];
   results: Match[];
   fixtures: Match[];
 }
 
-export default function DashboardClient({ activeTournament, predictions, results, fixtures }: Props) {
+export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures }: Props) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [activeTab, setActiveTab] = useState<'projections' | 'matches'>('projections');
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(() => {
+    const currentRun = simulationRuns.find(run => run.description === 'Current Projections');
+    if (currentRun) return currentRun.id;
+    return simulationRuns.length > 0 ? simulationRuns[simulationRuns.length - 1].id : null;
+  });
+
+  const activeRun = simulationRuns.find(run => run.id === selectedRunId);
+  const predictions = activeRun ? activeRun.predictions : [];
   const [isPending, startTransition] = useTransition();
   const [simMessage, setSimMessage] = useState('');
 
@@ -199,6 +215,24 @@ export default function DashboardClient({ activeTournament, predictions, results
                   ))}
                 </select>
                 <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="relative">
+                <select
+                  value={selectedRunId || ''}
+                  onChange={(e) => setSelectedRunId(Number(e.target.value))}
+                  className="w-full sm:w-64 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer font-semibold font-sans"
+                >
+                  {simulationRuns.map((run) => (
+                    <option key={run.id} value={run.id} className="bg-slate-950 text-slate-300 font-sans">
+                      {run.description}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400 font-sans">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                   </svg>

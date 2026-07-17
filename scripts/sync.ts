@@ -164,11 +164,25 @@ run()
     await prisma.$disconnect();
     await pool.end();
 
-    console.log('Running World Cup 2026 simulation via TypeScript engine...');
+    console.log('Running World Cup 2026 simulations for all milestones via TypeScript engine...');
     const config = new WorldCup48Config();
-    const engine = new SimulatorEngine(config, 10000);
-    await engine.runSimulation();
-    console.log('Simulation completed successfully.');
+
+    const milestones = [
+      { name: 'Start (Pre-tournament)', date: new Date('2026-06-10T23:59:59Z') },
+      { name: 'Matchday 1 Completed', date: new Date('2026-06-17T23:59:59Z') },
+      { name: 'Matchday 2 Completed', date: new Date('2026-06-23T23:59:59Z') },
+      { name: 'Matchday 3 Completed', date: new Date('2026-06-27T23:59:59Z') },
+      { name: 'Round of 32 Completed', date: new Date('2026-07-03T23:59:59Z') },
+      { name: 'Round of 16 Completed', date: new Date('2026-07-08T23:59:59Z') },
+      { name: 'Current Projections', date: undefined }
+    ];
+
+    for (const milestone of milestones) {
+      console.log(`Running simulation for milestone: ${milestone.name}...`);
+      const engine = new SimulatorEngine(config, 10000, milestone.date, milestone.name);
+      await engine.runSimulation();
+    }
+    console.log('All simulations completed successfully.');
   })
   .catch(async (err) => {
     console.error('Sync failed:', err);

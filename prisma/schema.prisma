@@ -43,16 +43,26 @@ model Match {
   awayTeam       Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
 }
 
+model SimulationRun {
+  id          Int          @id @default(autoincrement())
+  tournament  String
+  createdAt   DateTime     @default(now())
+  description String
+  predictions Prediction[]
+}
+
 // Stores the output of your simulation runs
 model Prediction {
-  id           Int      @id @default(autoincrement())
-  teamId       String
-  tournament   String
-  champions    Float    // Percentage (0.0 to 1.0)
-  final        Float
-  semifinals   Float
-  quarterfinals Float
-  updatedAt    DateTime @default(now())
+  id              Int           @id @default(autoincrement())
+  simulationRunId Int
+  teamId          String
+  tournament      String
+  champions       Float         // Percentage (0.0 to 1.0)
+  final           Float
+  semifinals      Float
+  quarterfinals   Float
+  updatedAt       DateTime      @default(now())
 
-  team         Team     @relation(fields: [teamId], references: [id])
+  simulationRun   SimulationRun @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
+  team            Team          @relation(fields: [teamId], references: [id])
 }
