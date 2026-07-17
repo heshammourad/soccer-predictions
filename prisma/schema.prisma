@@ -15,13 +15,16 @@ datasource db {
 
 // This models your existing team_ratings and nations_league_standings
 model Team {
-  id           String   @id // Use the code from your project (e.g., "QA", "CI")
-  name         String
-  currentElo   Int
-  group        String?  // Current tournament group (e.g., "A", "B")
-  homeMatches  Match[]  @relation("HomeTeam")
-  awayMatches  Match[]  @relation("AwayTeam")
-  predictions  Prediction[]
+  id            String   @id // Use the code from your project (e.g., "QA", "CI")
+  name          String
+  currentElo    Int
+  group         String?  // Current tournament group (e.g., "A", "B")
+  confederation String?  // FIFA Confederation (e.g. "UEFA", "CONMEBOL")
+  eloChange1Yr  Int?     // 1-Year rating change
+  rankChange1Yr Int?     // 1-Year rank change
+  homeMatches   Match[]  @relation("HomeTeam")
+  awayMatches   Match[]  @relation("AwayTeam")
+  predictions   Prediction[]
 }
 
 // Replaces your current results/fixtures arrays

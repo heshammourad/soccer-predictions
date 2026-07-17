@@ -39,6 +39,11 @@ async function main() {
   console.log('Clearing database tables...');
   await prisma.$executeRawUnsafe('TRUNCATE TABLE "Prediction", "Match", "Team" CASCADE;');
 
+  const confederationsPath = path.join(__dirname, '../app/lib/simulator/config/confederations.json');
+  const confederationsMap: { [code: string]: string } = fs.existsSync(confederationsPath)
+    ? JSON.parse(fs.readFileSync(confederationsPath, 'utf8'))
+    : {};
+
   console.log('Reading teams list...');
   // 1. Read teams.csv
   const teamsCsvPath = path.join(DATA_DIR, 'teams.csv');
@@ -60,10 +65,24 @@ async function main() {
   const ratingsPath = path.join(DATA_DIR, 'team_ratings');
   const ratingsRaw = readDataFile(ratingsPath);
   const teamRatings: { [code: string]: number } = {};
+  const teamEloChange1Yr: { [code: string]: number } = {};
+  const teamRankChange1Yr: { [code: string]: number } = {};
+  
   for (const line of ratingsRaw.split('\n')) {
     if (!line.trim()) continue;
     const fields = line.split('\t');
-    if (fields.length >= 4) {
+    if (fields.length >= 18) {
+      const code = fields[2].trim();
+      const rating = parseInt(fields[3].trim(), 10);
+      const rankChange = parseInt(fields[16].trim(), 10);
+      const eloChange = parseInt(fields[17].trim(), 10);
+      
+      if (code && !isNaN(rating)) {
+        teamRatings[code] = rating;
+        teamRankChange1Yr[code] = isNaN(rankChange) ? 0 : rankChange;
+        teamEloChange1Yr[code] = isNaN(eloChange) ? 0 : eloChange;
+      }
+    } else if (fields.length >= 4) {
       const code = fields[2].trim();
       const rating = parseInt(fields[3].trim(), 10);
       if (code && !isNaN(rating)) {
@@ -94,13 +113,19 @@ async function main() {
     const name = teamNames[code] || code;
     const currentElo = teamRatings[code] ?? 1000; // Default if not in ratings
     const group = groupsInfo[code] || null;
+    const confederation = confederationsMap[code] || null;
+    const eloChange1Yr = teamEloChange1Yr[code] ?? 0;
+    const rankChange1Yr = teamRankChange1Yr[code] ?? 0;
 
     await prisma.team.create({
       data: {
         id: code,
         name,
         currentElo,
-        group
+        group,
+        confederation,
+        eloChange1Yr,
+        rankChange1Yr
       }
     });
   }

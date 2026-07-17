@@ -5,6 +5,8 @@ import pg from 'pg';
 import { Session, ClientIdentifier, initTLS, destroyTLS } from 'node-tls-client';
 import { SimulatorEngine } from '../app/lib/simulator/engine';
 import { WorldCup48Config } from '../app/lib/simulator/config/worldCup';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -40,17 +42,46 @@ async function run() {
     const resultsData = await resultsRes.text();
 
     console.log('Updating team ELO ratings in database...');
+    
+    const confederationsPath = path.resolve(__dirname, '../app/lib/simulator/config/confederations.json');
+    const confederationsMap: { [code: string]: string } = fs.existsSync(confederationsPath)
+      ? JSON.parse(fs.readFileSync(confederationsPath, 'utf8'))
+      : {};
+      
     let ratingsCount = 0;
     for (const line of ratingsData.split('\n')) {
       if (!line.trim()) continue;
       const fields = line.split('\t');
-      if (fields.length >= 4) {
+      if (fields.length >= 18) {
+        const code = fields[2].trim();
+        const rating = parseInt(fields[3].trim(), 10);
+        const rankChange = parseInt(fields[16].trim(), 10);
+        const eloChange = parseInt(fields[17].trim(), 10);
+        
+        if (code && !isNaN(rating)) {
+          const confederation = confederationsMap[code] || null;
+          await prisma.team.updateMany({
+            where: { id: code },
+            data: {
+              currentElo: rating,
+              confederation,
+              eloChange1Yr: isNaN(eloChange) ? 0 : eloChange,
+              rankChange1Yr: isNaN(rankChange) ? 0 : rankChange
+            }
+          });
+          ratingsCount++;
+        }
+      } else if (fields.length >= 4) {
         const code = fields[2].trim();
         const rating = parseInt(fields[3].trim(), 10);
         if (code && !isNaN(rating)) {
+          const confederation = confederationsMap[code] || null;
           await prisma.team.updateMany({
             where: { id: code },
-            data: { currentElo: rating }
+            data: {
+              currentElo: rating,
+              confederation
+            }
           });
           ratingsCount++;
         }

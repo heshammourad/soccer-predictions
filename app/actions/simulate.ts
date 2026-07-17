@@ -4,17 +4,23 @@ import { revalidatePath } from 'next/cache';
 import { SimulatorEngine } from '../lib/simulator/engine';
 import { WorldCup48Config } from '../lib/simulator/config/worldCup';
 
-export async function triggerSimulation() {
+export async function triggerSimulation(tournamentCode: string) {
   try {
-    console.log("Starting World Cup 2026 simulation via TypeScript engine...");
+    const code = tournamentCode.toUpperCase();
+    console.log(`Starting simulation for ${code} via TypeScript engine...`);
     
-    const config = new WorldCup48Config();
+    let config;
+    if (code === 'WC') {
+      config = new WorldCup48Config();
+    } else {
+      throw new Error(`Simulation configuration not yet implemented for tournament code: ${tournamentCode}`);
+    }
+    
     const engine = new SimulatorEngine(config, 10000);
-    
     await engine.runSimulation();
     
-    // Revalidate index page so the new projections load
-    revalidatePath('/');
+    // Revalidate the tournament route
+    revalidatePath(`/tournament/${tournamentCode}`);
     return { success: true };
   } catch (error: any) {
     console.error("Simulation Server Action error:", error);

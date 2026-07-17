@@ -63,13 +63,13 @@ export default function DashboardClient({ activeTournament, predictions, results
 
   const handleTournamentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    router.push(`/?tournament=${val}`);
+    router.push(`/tournament/${val}`);
   };
 
   const handleSimulate = () => {
     setSimMessage('Simulating 10,000 tournaments on the server... this takes 5-10 seconds.');
     startTransition(async () => {
-      const res = await triggerSimulation();
+      const res = await triggerSimulation(activeTournament);
       if (res.success) {
         setSimMessage('Simulation completed! Projections updated.');
         setTimeout(() => setSimMessage(''), 5000);
