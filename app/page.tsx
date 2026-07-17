@@ -8,8 +8,13 @@ export const metadata = {
 };
 
 export default async function Page() {
-  // Query all teams ordered by current ELO descending
+  // Query only confederation-affiliated teams ordered by current ELO descending
   const teams = await prisma.team.findMany({
+    where: {
+      confederation: {
+        not: null,
+      },
+    },
     orderBy: {
       currentElo: 'desc',
     },
@@ -29,7 +34,7 @@ export default async function Page() {
               FIFA Associations
             </span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-900 text-slate-400 border border-slate-800 uppercase tracking-widest font-mono">
-              222 Active Teams
+              {teams.length} Active Teams
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-50 via-slate-100 to-slate-300 bg-clip-text text-transparent">
