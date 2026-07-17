@@ -137,6 +137,30 @@ export class SimulatorEngine {
       };
     });
 
+    // Pre-calculate shootout winners map for real-world draws to avoid 64 million operations in MC loop
+    const shootoutWinnersMap: { [matchId: number]: string } = {};
+    matches.forEach((match) => {
+      if (match.isKnockout && match.homeGoals !== null && match.awayGoals !== null && match.homeGoals === match.awayGoals) {
+        const homeAdvanced = matches.some(
+          (m) =>
+            m.isKnockout &&
+            m.date > match.date &&
+            (m.homeTeamId === match.homeTeamId || m.awayTeamId === match.homeTeamId)
+        );
+        const awayAdvanced = matches.some(
+          (m) =>
+            m.isKnockout &&
+            m.date > match.date &&
+            (m.homeTeamId === match.awayTeamId || m.awayTeamId === match.awayTeamId)
+        );
+        if (homeAdvanced && !awayAdvanced) {
+          shootoutWinnersMap[match.id] = match.homeTeamId;
+        } else if (awayAdvanced && !homeAdvanced) {
+          shootoutWinnersMap[match.id] = match.awayTeamId;
+        }
+      }
+    });
+
     // Monte Carlo loop
     for (let sim = 0; sim < this.simulationsCount; sim++) {
       const simElo = { ...initialEloMap };
@@ -213,6 +237,13 @@ export class SimulatorEngine {
 
       // C. Knockout stages
       let stageMatches = this.config.buildKnockoutBracket(rankedStandings);
+      
+      // Increment roundOf32 counts
+      stageMatches.forEach((m) => {
+        if (accumulator[m.homeTeamId]) accumulator[m.homeTeamId].roundOf32++;
+        if (accumulator[m.awayTeamId]) accumulator[m.awayTeamId].roundOf32++;
+      });
+
       let stageIndex = 0;
       let currentStageName = this.config.knockoutStages[0];
 
@@ -237,7 +268,8 @@ export class SimulatorEngine {
             } else if (actualResult.awayGoals > actualResult.homeGoals) {
               winner = actualResult.awayTeamId;
             } else {
-              winner = Math.random() < 0.5 ? actualResult.homeTeamId : actualResult.awayTeamId;
+              // Draw: determine who won the penalty shootout by checking who advanced to a subsequent round in matches
+              winner = shootoutWinnersMap[actualResult.id] || (Math.random() < 0.5 ? actualResult.homeTeamId : actualResult.awayTeamId);
             }
           } else {
             const location = this.config.getKnockoutMatchLocation(currentStageName, mIdx);

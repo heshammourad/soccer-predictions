@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { triggerSimulation } from '../actions/simulate';
-import { getFlagEmoji } from '../lib/flags';
+import { getFlagUrl } from '../lib/simulator/config/confederations';
 
 interface Team {
   id: string;
@@ -108,7 +108,8 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   const activeRunDescription = activeRun?.description || 'Current Projections';
   const isGroupStage = 
     activeRunDescription.includes('Start') ||
-    activeRunDescription.includes('Matchday') ||
+    activeRunDescription.includes('Matchday 1') ||
+    activeRunDescription.includes('Matchday 2') ||
     (activeRunDescription === 'Current Projections' && fixtures.some(f => !f.isKnockout));
 
   // Sort predictions based on whether it is group stage or knockout stage
@@ -361,47 +362,56 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
-                  {sortedPredictions.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-900/30 transition">
-                      <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
-                        <span className="text-lg select-none" title={p.teamId}>
-                          {getFlagEmoji(p.teamId)}
-                        </span>
-                        <span>{p.team.name}</span>
-                      </td>
-                      {isGroupStage && (
-                        <td className="py-3 px-4 text-center font-bold text-slate-400">
-                          Group {p.team.group}
+                  {sortedPredictions.map((p) => {
+                    const isEliminated = p.champions === 0 && !fixtures.some(f => f.homeTeamId === p.teamId || f.awayTeamId === p.teamId);
+                    return (
+                      <tr key={p.id} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
+                        <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getFlagUrl(p.teamId)}
+                            alt={`${p.team.name} flag`}
+                            className="h-4 w-auto max-w-[26px] rounded-sm shadow-sm border border-slate-850"
+                            loading="lazy"
+                          />
+                          <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
+                            {p.team.name}
+                          </span>
                         </td>
-                      )}
-                      <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">
-                        {p.team.currentElo}
-                      </td>
-                      {isGroupStage && (
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup)}>
-                          {formatProbability(p.winGroup, p.teamId)}
+                        {isGroupStage && (
+                          <td className="py-3 px-4 text-center font-bold text-slate-400">
+                            Group {p.team.group}
+                          </td>
+                        )}
+                        <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">
+                          {p.team.currentElo}
                         </td>
-                      )}
-                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32)}>
-                        {formatProbability(p.roundOf32, p.teamId)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16)}>
-                        {formatProbability(p.roundOf16, p.teamId)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals)}>
-                        {formatProbability(p.quarterfinals, p.teamId)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals)}>
-                        {formatProbability(p.semifinals, p.teamId)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final)}>
-                        {formatProbability(p.final, p.teamId)}
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions)}>
-                        {formatProbability(p.champions, p.teamId)}
-                      </td>
-                    </tr>
-                  ))}
+                        {isGroupStage && (
+                          <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup)}>
+                            {formatProbability(p.winGroup, p.teamId)}
+                          </td>
+                        )}
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32)}>
+                          {formatProbability(p.roundOf32, p.teamId)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16)}>
+                          {formatProbability(p.roundOf16, p.teamId)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals)}>
+                          {formatProbability(p.quarterfinals, p.teamId)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals)}>
+                          {formatProbability(p.semifinals, p.teamId)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final)}>
+                          {formatProbability(p.final, p.teamId)}
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions)}>
+                          {formatProbability(p.champions, p.teamId)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
