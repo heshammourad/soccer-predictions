@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { triggerSimulation } from '../actions/simulate';
+import { getFlagEmoji } from '../lib/flags';
 
 interface Team {
   id: string;
@@ -15,6 +16,9 @@ interface Prediction {
   id: number;
   teamId: string;
   tournament: string;
+  winGroup: number;
+  roundOf32: number;
+  roundOf16: number;
   champions: number;
   final: number;
   semifinals: number;
@@ -95,21 +99,89 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
 
   // Filter predictions
   const filteredPredictions = predictions.filter((p) => {
-    const matchesSearch = p.team.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = p.team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          p.teamId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesGroup = selectedGroup === 'ALL' || p.team.group === selectedGroup;
     return matchesSearch && matchesGroup;
   });
 
-  // Group predictions by group letter for the grid view
-  const groupedPredictions: { [group: string]: Prediction[] } = {};
-  filteredPredictions.forEach((p) => {
-    const g = p.team.group || 'Other';
-    if (!groupedPredictions[g]) groupedPredictions[g] = [];
-    groupedPredictions[g].push(p);
+  const activeRunDescription = activeRun?.description || 'Current Projections';
+  const isGroupStage = 
+    activeRunDescription.includes('Start') ||
+    activeRunDescription.includes('Matchday') ||
+    (activeRunDescription === 'Current Projections' && fixtures.some(f => !f.isKnockout));
+
+  // Sort predictions based on whether it is group stage or knockout stage
+  const sortedPredictions = [...filteredPredictions].sort((a, b) => {
+    if (isGroupStage) {
+      const groupA = a.team.group || '';
+      const groupB = b.team.group || '';
+      if (groupA !== groupB) {
+        return groupA.localeCompare(groupB);
+      }
+    }
+    // Sort by success metrics descending
+    return (
+      (b.champions - a.champions) ||
+      (b.final - a.final) ||
+      (b.semifinals - a.semifinals) ||
+      (b.quarterfinals - a.quarterfinals) ||
+      (b.roundOf16 - a.roundOf16) ||
+      (b.roundOf32 - a.roundOf32) ||
+      (b.winGroup - a.winGroup) ||
+      b.team.currentElo - a.team.currentElo
+    );
   });
 
-  // Format percent utility
-  const formatPercent = (val: number) => `${Math.round(val * 100)}%`;
+  // Helper to format probabilities with the required strict conditions
+  const formatProbability = (val: number, teamId: string) => {
+    if (val === 0) {
+      // Check if team is still active in group stage or knockout stage
+      const hasUpcomingGroup = fixtures.some(
+        (f) => !f.isKnockout && (f.homeTeamId === teamId || f.awayTeamId === teamId)
+      );
+      const hasUpcomingKnockout = fixtures.some(
+        (f) => f.isKnockout && (f.homeTeamId === teamId || f.awayTeamId === teamId)
+      );
+      if (hasUpcomingGroup || hasUpcomingKnockout) {
+        return '<1%';
+      }
+      return '—';
+    }
+
+    if (val === 1) {
+      const hasUpcoming = fixtures.some(
+        (f) => f.homeTeamId === teamId || f.awayTeamId === teamId
+      );
+      if (hasUpcoming) {
+        return '>99%';
+      }
+      return '100%';
+    }
+
+    const percentage = val * 100;
+    if (percentage > 0 && percentage < 0.5) {
+      return '<1%';
+    }
+    if (percentage >= 99.5 && percentage < 100) {
+      return '>99%';
+    }
+
+    return `${Math.round(percentage)}%`;
+  };
+
+  // Helper to calculate cell background style (green-white gradient overlay)
+  const getCellBgStyle = (val: number) => {
+    if (val === 0) return {};
+    // Linearly interpolate rgb color between white (255, 255, 255) and Green (34, 197, 94)
+    const r = Math.round(255 - (255 - 34) * val);
+    const g = Math.round(255 - (255 - 197) * val);
+    const b = Math.round(255 - (255 - 94) * val);
+    return {
+      backgroundColor: `rgb(${r}, ${g}, ${b})`,
+      color: '#020617', // high contrast dark text color for readability
+    };
+  };
 
   return (
     <div className="space-y-8">
@@ -272,66 +344,67 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               <p className="text-sm text-slate-500">Run the simulation above to calculate predictions!</p>
             </div>
           ) : (
-            <>
-              {selectedGroup !== 'ALL' ? (
-                // Table view for single group
-                <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/20">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 bg-slate-900/40 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        <th className="py-4 px-6">Team</th>
-                        <th className="py-4 px-6 text-center">ELO Rating</th>
-                        <th className="py-4 px-6 text-center">Quarterfinals</th>
-                        <th className="py-4 px-6 text-center">Semifinals</th>
-                        <th className="py-4 px-6 text-center">Finals</th>
-                        <th className="py-4 px-6 text-center">Champions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 text-sm text-slate-300">
-                      {filteredPredictions.map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-900/30 transition">
-                          <td className="py-4 px-6 font-medium text-slate-200 flex items-center gap-3">
-                            <span className="text-slate-500 text-xs font-mono w-6">{p.teamId}</span>
-                            {p.team.name}
-                          </td>
-                          <td className="py-4 px-6 text-center font-semibold text-slate-400">{p.team.currentElo}</td>
-                          <td className="py-4 px-6 text-center">{formatPercent(p.quarterfinals)}</td>
-                          <td className="py-4 px-6 text-center">{formatPercent(p.semifinals)}</td>
-                          <td className="py-4 px-6 text-center">{formatPercent(p.final)}</td>
-                          <td className="py-4 px-6 text-center font-bold text-emerald-400 bg-emerald-500/5">{formatPercent(p.champions)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                // Grid view of all groups
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {Object.entries(groupedPredictions).sort().map(([group, list]) => (
-                    <div key={group} className="border border-slate-800 rounded-2xl bg-slate-900/20 overflow-hidden backdrop-blur-md">
-                      <div className="px-5 py-4 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-200">Group {group}</h3>
-                        <span className="text-xs text-slate-500 font-semibold uppercase">WC 2026</span>
-                      </div>
-                      <div className="p-4 space-y-3">
-                        {list.sort((a, b) => b.champions - a.champions).map((p) => (
-                          <div key={p.id} className="flex justify-between items-center p-2.5 rounded-lg hover:bg-slate-900/40 transition">
-                            <div className="flex items-center gap-3">
-                              <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded font-mono text-slate-400">{p.teamId}</span>
-                              <span className="text-sm font-medium text-slate-300">{p.team.name}</span>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs font-mono">
-                              <span className="text-slate-500">Elo: {p.team.currentElo}</span>
-                              <span className="font-bold text-emerald-400 text-right w-12">{formatPercent(p.champions)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+            <div className="overflow-x-auto border border-slate-800 rounded-2xl bg-slate-900/10 backdrop-blur-xl">
+              <table className="w-full text-left border-collapse min-w-[900px]">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-900/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
+                    <th className="py-4 px-5">Team</th>
+                    {isGroupStage && <th className="py-4 px-4 text-center">Group</th>}
+                    <th className="py-4 px-4 text-center w-24">ELO</th>
+                    {isGroupStage && <th className="py-4 px-4 text-center w-28">Win Group</th>}
+                    <th className="py-4 px-4 text-center w-28">Round of 32</th>
+                    <th className="py-4 px-4 text-center w-28">Round of 16</th>
+                    <th className="py-4 px-4 text-center w-28">Quarterfinals</th>
+                    <th className="py-4 px-4 text-center w-28">Semifinals</th>
+                    <th className="py-4 px-4 text-center w-28">Finalist</th>
+                    <th className="py-4 px-4 text-center w-28">Champion</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
+                  {sortedPredictions.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-900/30 transition">
+                      <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
+                        <span className="text-lg select-none" title={p.teamId}>
+                          {getFlagEmoji(p.teamId)}
+                        </span>
+                        <span>{p.team.name}</span>
+                      </td>
+                      {isGroupStage && (
+                        <td className="py-3 px-4 text-center font-bold text-slate-400">
+                          Group {p.team.group}
+                        </td>
+                      )}
+                      <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">
+                        {p.team.currentElo}
+                      </td>
+                      {isGroupStage && (
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup)}>
+                          {formatProbability(p.winGroup, p.teamId)}
+                        </td>
+                      )}
+                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32)}>
+                        {formatProbability(p.roundOf32, p.teamId)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16)}>
+                        {formatProbability(p.roundOf16, p.teamId)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals)}>
+                        {formatProbability(p.quarterfinals, p.teamId)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals)}>
+                        {formatProbability(p.semifinals, p.teamId)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final)}>
+                        {formatProbability(p.final, p.teamId)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions)}>
+                        {formatProbability(p.champions, p.teamId)}
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )}
-            </>
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

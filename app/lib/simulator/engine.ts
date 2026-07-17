@@ -115,6 +115,7 @@ export class SimulatorEngine {
     // Accumulate results
     const accumulator: {
       [teamId: string]: {
+        winGroup: number;
         champions: number;
         final: number;
         semifinals: number;
@@ -126,6 +127,7 @@ export class SimulatorEngine {
 
     tournamentTeamIds.forEach((id) => {
       accumulator[id] = {
+        winGroup: 0,
         champions: 0,
         final: 0,
         semifinals: 0,
@@ -200,6 +202,13 @@ export class SimulatorEngine {
           ...simResults.filter((m) => !m.isKnockout)
         ];
         rankedStandings[g] = this.config.sortGroupStandings(simStandings[g], groupMatchesForSort);
+
+        if (rankedStandings[g] && rankedStandings[g].length > 0) {
+          const groupWinnerId = rankedStandings[g][0].teamId;
+          if (accumulator[groupWinnerId]) {
+            accumulator[groupWinnerId].winGroup++;
+          }
+        }
       });
 
       // C. Knockout stages
@@ -321,6 +330,9 @@ export class SimulatorEngine {
     });
 
     for (const [teamId, totals] of Object.entries(accumulator)) {
+      const winGroup = totals.winGroup / this.simulationsCount;
+      const roundOf32 = totals.roundOf32 / this.simulationsCount;
+      const roundOf16 = totals.roundOf16 / this.simulationsCount;
       const champions = totals.champions / this.simulationsCount;
       const final = totals.final / this.simulationsCount;
       const semifinals = totals.semifinals / this.simulationsCount;
@@ -331,6 +343,9 @@ export class SimulatorEngine {
           simulationRunId: run.id,
           teamId,
           tournament: this.config.code,
+          winGroup,
+          roundOf32,
+          roundOf16,
           champions,
           final,
           semifinals,

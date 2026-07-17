@@ -9,6 +9,10 @@ generator client {
   output   = "../app/generated/prisma"
 }
 
+generator client_default {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
 }
@@ -57,6 +61,9 @@ model Prediction {
   simulationRunId Int
   teamId          String
   tournament      String
+  winGroup        Float         @default(0.0)
+  roundOf32       Float         @default(0.0)
+  roundOf16       Float         @default(0.0)
   champions       Float         // Percentage (0.0 to 1.0)
   final           Float
   semifinals      Float
