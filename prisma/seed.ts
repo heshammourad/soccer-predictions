@@ -74,8 +74,8 @@ async function main() {
     if (fields.length >= 18) {
       const code = fields[2].trim();
       const rating = parseInt(fields[3].trim(), 10);
-      const rankChange = parseInt(fields[16].trim(), 10);
-      const eloChange = parseInt(fields[17].trim(), 10);
+      const rankChange = parseInt(fields[14].trim(), 10);
+      const eloChange = parseInt(fields[15].trim(), 10);
       
       if (code && !isNaN(rating)) {
         teamRatings[code] = rating;
