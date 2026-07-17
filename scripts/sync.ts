@@ -174,6 +174,8 @@ run()
       { name: 'Matchday 3 Completed', date: new Date('2026-06-27T23:59:59Z') },
       { name: 'Round of 32 Completed', date: new Date('2026-07-03T23:59:59Z') },
       { name: 'Round of 16 Completed', date: new Date('2026-07-08T23:59:59Z') },
+      { name: 'Quarterfinals Completed', date: new Date('2026-07-13T23:59:59Z') },
+      { name: 'Semifinals Completed', date: new Date('2026-07-17T23:59:59Z') },
       { name: 'Current Projections', date: undefined }
     ];
 
