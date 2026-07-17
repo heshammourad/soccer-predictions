@@ -1,0 +1,32 @@
+name: Daily Soccer Predictor Sync
+
+on:
+  schedule:
+    # Run once a day at 06:00 UTC (sweet spot for global game gaps and ratings updates)
+    - cron: '0 6 * * *'
+  # Allow manual trigger from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  sync-and-simulate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Scraper & Simulation Engine
+        run: npx tsx scripts/sync.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
