@@ -55,6 +55,18 @@ interface Props {
   fixtures: Match[];
 }
 
+const MILESTONE_DATES: { [desc: string]: string | undefined } = {
+  'Start (Pre-tournament)': '2026-06-10T23:59:59Z',
+  'Matchday 1 Completed': '2026-06-17T23:59:59Z',
+  'Matchday 2 Completed': '2026-06-23T23:59:59Z',
+  'Matchday 3 Completed': '2026-06-27T23:59:59Z',
+  'Round of 32 Completed': '2026-07-03T23:59:59Z',
+  'Round of 16 Completed': '2026-07-08T23:59:59Z',
+  'Quarterfinals Completed': '2026-07-13T23:59:59Z',
+  'Semifinals Completed': '2026-07-17T23:59:59Z',
+  'Current Projections': undefined,
+};
+
 export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures }: Props) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,11 +118,26 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   });
 
   const activeRunDescription = activeRun?.description || 'Current Projections';
+  const cutOffDateStr = MILESTONE_DATES[activeRunDescription];
+  const cutOffDate = cutOffDateStr ? new Date(cutOffDateStr) : undefined;
+
+  // Dynamically filter results and fixtures based on the active run's historical date
+  const activeResults = results.filter((m) => {
+    if (m.homeGoals === null) return false;
+    if (cutOffDate) return new Date(m.date) <= cutOffDate;
+    return true;
+  });
+
+  const activeFixtures = fixtures.concat(results).filter((m) => {
+    if (cutOffDate) return new Date(m.date) > cutOffDate;
+    return m.homeGoals === null;
+  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
   const isGroupStage = 
     activeRunDescription.includes('Start') ||
     activeRunDescription.includes('Matchday 1') ||
     activeRunDescription.includes('Matchday 2') ||
-    (activeRunDescription === 'Current Projections' && fixtures.some(f => !f.isKnockout));
+    (activeRunDescription === 'Current Projections' && activeFixtures.some(f => !f.isKnockout));
 
   // Sort predictions based on whether it is group stage or knockout stage
   const sortedPredictions = [...filteredPredictions].sort((a, b) => {
@@ -138,10 +165,10 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   const formatProbability = (val: number, teamId: string) => {
     if (val === 0) {
       // Check if team is still active in group stage or knockout stage
-      const hasUpcomingGroup = fixtures.some(
+      const hasUpcomingGroup = activeFixtures.some(
         (f) => !f.isKnockout && (f.homeTeamId === teamId || f.awayTeamId === teamId)
       );
-      const hasUpcomingKnockout = fixtures.some(
+      const hasUpcomingKnockout = activeFixtures.some(
         (f) => f.isKnockout && (f.homeTeamId === teamId || f.awayTeamId === teamId)
       );
       if (hasUpcomingGroup || hasUpcomingKnockout) {
@@ -151,7 +178,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     }
 
     if (val === 1) {
-      const hasUpcoming = fixtures.some(
+      const hasUpcoming = activeFixtures.some(
         (f) => f.homeTeamId === teamId || f.awayTeamId === teamId
       );
       if (hasUpcoming) {
@@ -363,7 +390,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 </thead>
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
                   {sortedPredictions.map((p) => {
-                    const isEliminated = p.champions === 0 && !fixtures.some(f => f.homeTeamId === p.teamId || f.awayTeamId === p.teamId);
+                    const isEliminated = p.champions === 0 && !activeFixtures.some(f => f.homeTeamId === p.teamId || f.awayTeamId === p.teamId);
                     return (
                       <tr key={p.id} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
                         <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
@@ -426,15 +453,15 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-              Recent Match Results ({results.length})
+              Recent Match Results ({activeResults.length})
             </h3>
-            {results.length === 0 ? (
+            {activeResults.length === 0 ? (
               <div className="p-8 text-center border border-slate-800 rounded-xl bg-slate-900/10 text-slate-500 text-sm">
                 No completed match results found in database.
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                {results.map((m) => (
+                {activeResults.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
                     <div className="flex-1 text-right pr-4 font-semibold text-slate-200">
                       {m.homeTeam?.name || m.homeTeamId}
@@ -460,15 +487,15 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-slate-200 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
-              Upcoming Fixtures ({fixtures.length})
+              Upcoming Fixtures ({activeFixtures.length})
             </h3>
-            {fixtures.length === 0 ? (
+            {activeFixtures.length === 0 ? (
               <div className="p-8 text-center border border-slate-800 rounded-xl bg-slate-900/10 text-slate-500 text-sm">
                 No upcoming fixtures scheduled.
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                {fixtures.map((m) => (
+                {activeFixtures.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
                     <div className="flex-1 text-right pr-4 font-medium text-slate-300">
                       {m.homeTeam?.name || m.homeTeamId}
