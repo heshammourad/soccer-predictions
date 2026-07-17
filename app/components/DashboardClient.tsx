@@ -161,6 +161,31 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     );
   });
 
+  const getIsActive = (p: Prediction) => {
+    if (activeRunDescription.includes('Start') || 
+        activeRunDescription.includes('Matchday')) {
+      return p.roundOf32 > 0;
+    }
+    if (activeRunDescription.includes('Round of 32')) {
+      return p.roundOf16 > 0;
+    }
+    if (activeRunDescription.includes('Round of 16')) {
+      return p.quarterfinals > 0;
+    }
+    if (activeRunDescription.includes('Quarterfinals')) {
+      return p.semifinals > 0;
+    }
+    if (activeRunDescription.includes('Semifinals') || activeRunDescription === 'Current Projections') {
+      return p.final > 0;
+    }
+    return p.champions > 0;
+  };
+
+  const isEliminatedMap: { [teamId: string]: boolean } = {};
+  predictions.forEach((p) => {
+    isEliminatedMap[p.teamId] = !getIsActive(p);
+  });
+
   // Helper to format probabilities with the required strict conditions
   const formatProbability = (val: number, teamId: string) => {
     if (val === 0) {
@@ -199,12 +224,13 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   };
 
   // Helper to calculate cell background style (green-white gradient overlay)
-  const getCellBgStyle = (val: number) => {
-    if (val === 0) return {};
+  const getCellBgStyle = (val: number, text: string) => {
+    if (text === '—') return {};
+    const effectiveVal = text === '<1%' ? 0.005 : val;
     // Linearly interpolate rgb color between white (255, 255, 255) and Green (34, 197, 94)
-    const r = Math.round(255 - (255 - 34) * val);
-    const g = Math.round(255 - (255 - 197) * val);
-    const b = Math.round(255 - (255 - 94) * val);
+    const r = Math.round(255 - (255 - 34) * effectiveVal);
+    const g = Math.round(255 - (255 - 197) * effectiveVal);
+    const b = Math.round(255 - (255 - 94) * effectiveVal);
     return {
       backgroundColor: `rgb(${r}, ${g}, ${b})`,
       color: '#020617', // high contrast dark text color for readability
@@ -390,7 +416,15 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 </thead>
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
                   {sortedPredictions.map((p) => {
-                    const isEliminated = p.champions === 0 && !activeFixtures.some(f => f.homeTeamId === p.teamId || f.awayTeamId === p.teamId);
+                    const isEliminated = isEliminatedMap[p.teamId];
+                    const winGroupTxt = formatProbability(p.winGroup, p.teamId);
+                    const roundOf32Txt = formatProbability(p.roundOf32, p.teamId);
+                    const roundOf16Txt = formatProbability(p.roundOf16, p.teamId);
+                    const quarterfinalsTxt = formatProbability(p.quarterfinals, p.teamId);
+                    const semifinalsTxt = formatProbability(p.semifinals, p.teamId);
+                    const finalTxt = formatProbability(p.final, p.teamId);
+                    const championsTxt = formatProbability(p.champions, p.teamId);
+
                     return (
                       <tr key={p.id} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
                         <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
@@ -414,27 +448,27 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                           {p.team.currentElo}
                         </td>
                         {isGroupStage && (
-                          <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup)}>
-                            {formatProbability(p.winGroup, p.teamId)}
+                          <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup, winGroupTxt)}>
+                            {winGroupTxt}
                           </td>
                         )}
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32)}>
-                          {formatProbability(p.roundOf32, p.teamId)}
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32, roundOf32Txt)}>
+                          {roundOf32Txt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16)}>
-                          {formatProbability(p.roundOf16, p.teamId)}
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16, roundOf16Txt)}>
+                          {roundOf16Txt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals)}>
-                          {formatProbability(p.quarterfinals, p.teamId)}
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals, quarterfinalsTxt)}>
+                          {quarterfinalsTxt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals)}>
-                          {formatProbability(p.semifinals, p.teamId)}
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals, semifinalsTxt)}>
+                          {semifinalsTxt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final)}>
-                          {formatProbability(p.final, p.teamId)}
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final, finalTxt)}>
+                          {finalTxt}
                         </td>
-                        <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions)}>
-                          {formatProbability(p.champions, p.teamId)}
+                        <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions, championsTxt)}>
+                          {championsTxt}
                         </td>
                       </tr>
                     );
