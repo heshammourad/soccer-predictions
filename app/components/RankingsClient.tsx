@@ -116,7 +116,6 @@ export default function RankingsClient({ teams }: Props) {
                 )}
                 <th className="py-4 px-6 w-16">Flag</th>
                 <th className="py-4 px-6">Country</th>
-                <th className="py-4 px-6 w-28 text-center">Confederation</th>
                 <th className="py-4 px-6 w-32 text-right">Rating</th>
                 <th className="py-4 px-6 w-24 text-center">1-Yr Change</th>
               </tr>
@@ -166,18 +165,10 @@ export default function RankingsClient({ teams }: Props) {
 
                     {/* Country Name */}
                     <td className="py-3.5 px-6 font-semibold text-slate-100 group-hover:text-indigo-400 transition">
-                      <span className="flex items-center gap-2">
-                        {t.name}
-                        <span className="text-[10px] text-slate-500 font-mono uppercase bg-slate-900 border border-slate-800/80 px-1.5 py-0.5 rounded">
-                          {t.id}
-                        </span>
-                      </span>
+                      {t.name}
                     </td>
 
-                    {/* Confederation */}
-                    <td className="py-3.5 px-6 text-center text-xs font-semibold text-slate-400">
-                      {t.confederation || '-'}
-                    </td>
+
 
                     {/* Rating */}
                     <td className="py-3.5 px-6 text-right font-bold text-slate-200 font-mono">
