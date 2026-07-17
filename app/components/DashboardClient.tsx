@@ -67,6 +67,9 @@ const MILESTONE_DATES: { [desc: string]: string | undefined } = {
   'Current Projections': undefined,
 };
 
+type SortColumn = 'team' | 'group' | 'elo' | 'winGroup' | 'roundOf32' | 'roundOf16' | 'quarterfinals' | 'semifinals' | 'final' | 'champions';
+type SortDir = 'asc' | 'desc';
+
 export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures }: Props) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
@@ -77,6 +80,17 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     if (currentRun) return currentRun.id;
     return simulationRuns.length > 0 ? simulationRuns[simulationRuns.length - 1].id : null;
   });
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const handleSort = (col: SortColumn) => {
+    if (sortColumn === col) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortColumn(col);
+      setSortDir(col === 'team' || col === 'group' ? 'asc' : 'desc');
+    }
+  };
 
   const activeRun = simulationRuns.find(run => run.id === selectedRunId);
   const predictions = activeRun ? activeRun.predictions : [];
@@ -141,6 +155,23 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
 
   // Sort predictions based on whether it is group stage or knockout stage
   const sortedPredictions = [...filteredPredictions].sort((a, b) => {
+    // If user has selected a sort column, use that
+    if (sortColumn) {
+      let cmp = 0;
+      if (sortColumn === 'team') cmp = a.team.name.localeCompare(b.team.name);
+      else if (sortColumn === 'group') cmp = (a.team.group || '').localeCompare(b.team.group || '') || (b.champions - a.champions);
+      else if (sortColumn === 'elo') cmp = a.team.currentElo - b.team.currentElo;
+      else if (sortColumn === 'winGroup') cmp = a.winGroup - b.winGroup;
+      else if (sortColumn === 'roundOf32') cmp = a.roundOf32 - b.roundOf32;
+      else if (sortColumn === 'roundOf16') cmp = a.roundOf16 - b.roundOf16;
+      else if (sortColumn === 'quarterfinals') cmp = a.quarterfinals - b.quarterfinals;
+      else if (sortColumn === 'semifinals') cmp = a.semifinals - b.semifinals;
+      else if (sortColumn === 'final') cmp = a.final - b.final;
+      else if (sortColumn === 'champions') cmp = a.champions - b.champions;
+      return sortDir === 'desc' ? -cmp : cmp;
+    }
+
+    // Default: group stage → group first, then success metrics
     if (isGroupStage) {
       const groupA = a.team.group || '';
       const groupB = b.team.group || '';
@@ -402,16 +433,29 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               <table className="w-full text-left border-collapse min-w-[900px]">
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-900/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
-                    <th className="py-4 px-5">Team</th>
-                    {isGroupStage && <th className="py-4 px-4 text-center">Group</th>}
-                    <th className="py-4 px-4 text-center w-24">ELO</th>
-                    {isGroupStage && <th className="py-4 px-4 text-center w-28">Win Group</th>}
-                    <th className="py-4 px-4 text-center w-28">Round of 32</th>
-                    <th className="py-4 px-4 text-center w-28">Round of 16</th>
-                    <th className="py-4 px-4 text-center w-28">Quarterfinals</th>
-                    <th className="py-4 px-4 text-center w-28">Semifinals</th>
-                    <th className="py-4 px-4 text-center w-28">Finalist</th>
-                    <th className="py-4 px-4 text-center w-28">Champion</th>
+                    {(['team', 'group', 'elo', 'winGroup', 'roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'] as SortColumn[]).filter(col => {
+                      if (col === 'group' && !isGroupStage) return false;
+                      if (col === 'winGroup' && !isGroupStage) return false;
+                      return true;
+                    }).map(col => {
+                      const labels: Record<SortColumn, string> = {
+                        team: 'Team', group: 'Group', elo: 'ELO',
+                        winGroup: 'Win Group', roundOf32: 'Round of 32', roundOf16: 'Round of 16',
+                        quarterfinals: 'Quarterfinals', semifinals: 'Semifinals', final: 'Finalist', champions: 'Champion'
+                      };
+                      const isSorted = sortColumn === col;
+                      const arrow = isSorted ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
+                      const isTeam = col === 'team';
+                      return (
+                        <th
+                          key={col}
+                          onClick={() => handleSort(col)}
+                          className={`py-4 ${isTeam ? 'px-5 text-left' : 'px-4 text-center w-28'} cursor-pointer hover:text-slate-200 transition whitespace-nowrap ${isSorted ? 'text-indigo-400' : ''}`}
+                        >
+                          {labels[col]}{arrow}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
