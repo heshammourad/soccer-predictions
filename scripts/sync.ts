@@ -7,6 +7,7 @@ import { SimulatorEngine } from '../app/lib/simulator/engine';
 import { WorldCup48Config } from '../app/lib/simulator/config/worldCup';
 import * as fs from 'fs';
 import * as path from 'path';
+import { pool as dbPool, prisma as dbPrisma } from '../app/lib/db';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -165,11 +166,7 @@ run()
   .then(async () => {
     console.log('Database sync completed successfully.');
     
-    // Close scraper's prisma client to free up connections
-    await prisma.$disconnect();
-    await pool.end();
-
-    console.log('Running World Cup 2026 simulations for all milestones via TypeScript engine...');
+    console.log('Running World Cup 2026 simulations via TypeScript engine...');
     const config = new WorldCup48Config();
 
     const milestones = [
@@ -184,18 +181,53 @@ run()
       { name: 'Current Projections', date: undefined }
     ];
 
+    const now = new Date();
+
     for (const milestone of milestones) {
+      if (milestone.date && milestone.date > now) {
+        console.log(`Skipping future milestone: ${milestone.name} (${milestone.date.toISOString()})`);
+        continue;
+      }
+
+      if (milestone.date) {
+        // Check if the simulation run already exists in the database
+        const existing = await prisma.simulationRun.findFirst({
+          where: {
+            tournament: config.code,
+            description: milestone.name
+          }
+        });
+        if (existing) {
+          console.log(`Skipping historical milestone: ${milestone.name} (already exists in database)`);
+          continue;
+        }
+      }
+
       console.log(`Running simulation for milestone: ${milestone.name}...`);
       const engine = new SimulatorEngine(config, 10000, milestone.date, milestone.name);
       await engine.runSimulation();
     }
     console.log('All simulations completed successfully.');
+
+    // Disconnect clients and end pools
+    await prisma.$disconnect();
+    await pool.end();
+    await dbPrisma.$disconnect();
+    if (dbPool) {
+      await dbPool.end();
+    }
   })
   .catch(async (err) => {
     console.error('Sync failed:', err);
     try {
       await prisma.$disconnect();
       await pool.end();
+    } catch (e) {}
+    try {
+      await dbPrisma.$disconnect();
+      if (dbPool) {
+        await dbPool.end();
+      }
     } catch (e) {}
     process.exit(1);
   });
