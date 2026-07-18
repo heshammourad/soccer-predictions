@@ -4,6 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { triggerSimulation } from '../actions/simulate';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
+import { calculateMathematicalStatus } from '../lib/simulator/mathematicalStatus';
 
 interface Team {
   id: string;
@@ -154,88 +155,202 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     activeRunDescription.includes('Matchday 2') ||
     (activeRunDescription === 'Current Projections' && activeFixtures.some(f => !f.isKnockout));
 
-  // Sort predictions based on whether it is group stage or knockout stage
-  const sortedPredictions = [...filteredPredictions].sort((a, b) => {
-    // If user has selected a sort column, use that
-    if (sortColumn) {
-      let cmp = 0;
-      if (sortColumn === 'team') cmp = a.team.name.localeCompare(b.team.name);
-      else if (sortColumn === 'group') cmp = (a.team.group || '').localeCompare(b.team.group || '') || (b.champions - a.champions);
-      else if (sortColumn === 'elo') cmp = a.team.currentElo - b.team.currentElo;
-      else if (sortColumn === 'winGroup') cmp = a.winGroup - b.winGroup;
-      else if (sortColumn === 'roundOf32') cmp = a.roundOf32 - b.roundOf32;
-      else if (sortColumn === 'roundOf16') cmp = a.roundOf16 - b.roundOf16;
-      else if (sortColumn === 'quarterfinals') cmp = a.quarterfinals - b.quarterfinals;
-      else if (sortColumn === 'semifinals') cmp = a.semifinals - b.semifinals;
-      else if (sortColumn === 'final') cmp = a.final - b.final;
-      else if (sortColumn === 'champions') cmp = a.champions - b.champions;
-      return sortDir === 'desc' ? -cmp : cmp;
+  const getTargetStageKey = (desc: string) => {
+    if (desc.includes('Start') || desc.includes('Matchday')) {
+      return 'roundOf32';
+    }
+    if (desc.includes('Round of 32')) {
+      return 'roundOf16';
+    }
+    if (desc.includes('Round of 16')) {
+      return 'quarterfinals';
+    }
+    if (desc.includes('Quarterfinals')) {
+      return 'semifinals';
+    }
+    if (desc.includes('Semifinals')) {
+      return 'final';
     }
 
-    // Default: group stage → group first, then success metrics
-    if (isGroupStage) {
-      const groupA = a.team.group || '';
-      const groupB = b.team.group || '';
-      if (groupA !== groupB) {
-        return groupA.localeCompare(groupB);
+    // Default or 'Current Projections' fallback: check predictions to find the active stage
+    const stages = ['roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'];
+    for (const stage of stages) {
+      const hasFractional = predictions.some(p => {
+        const val = p[stage as keyof Prediction] as number;
+        return val > 0 && val < 1;
+      });
+      if (hasFractional) {
+        return stage;
       }
     }
-    // Sort by success metrics descending
-    return (
-      (b.champions - a.champions) ||
-      (b.final - a.final) ||
-      (b.semifinals - a.semifinals) ||
-      (b.quarterfinals - a.quarterfinals) ||
-      (b.roundOf16 - a.roundOf16) ||
-      (b.roundOf32 - a.roundOf32) ||
-      (b.winGroup - a.winGroup) ||
-      b.team.currentElo - a.team.currentElo
-    );
-  });
-
-  const getIsActive = (p: Prediction) => {
-    if (activeRunDescription.includes('Start') || 
-        activeRunDescription.includes('Matchday')) {
-      return p.roundOf32 > 0;
-    }
-    if (activeRunDescription.includes('Round of 32')) {
-      return p.roundOf16 > 0;
-    }
-    if (activeRunDescription.includes('Round of 16')) {
-      return p.quarterfinals > 0;
-    }
-    if (activeRunDescription.includes('Quarterfinals')) {
-      return p.semifinals > 0;
-    }
-    if (activeRunDescription.includes('Semifinals') || activeRunDescription === 'Current Projections') {
-      return p.final > 0;
-    }
-    return p.champions > 0;
+    return 'champions';
   };
+
+  const simpleTeams = React.useMemo(() => {
+    return predictions.map((p) => ({
+      id: p.teamId,
+      name: p.team.name,
+      group: p.team.group,
+    }));
+  }, [predictions]);
+
+  const mathStatus = React.useMemo(() => {
+    if (predictions.length === 0) {
+      return {
+        guaranteedProgress: new Set<string>(),
+        mathematicallyEliminated: new Set<string>(),
+        guaranteedWinGroup: new Set<string>(),
+        eliminatedWinGroup: new Set<string>(),
+      };
+    }
+    
+    if (isGroupStage) {
+      return calculateMathematicalStatus(
+        simpleTeams,
+        activeResults.map(m => ({
+          homeTeamId: m.homeTeamId,
+          awayTeamId: m.awayTeamId,
+          homeGoals: m.homeGoals,
+          awayGoals: m.awayGoals,
+          isKnockout: m.isKnockout,
+        })),
+        activeFixtures.map(m => ({
+          homeTeamId: m.homeTeamId,
+          awayTeamId: m.awayTeamId,
+          homeGoals: m.homeGoals,
+          awayGoals: m.awayGoals,
+          isKnockout: m.isKnockout,
+        }))
+      );
+    } else {
+      const targetStageKey = getTargetStageKey(activeRunDescription);
+      const guaranteedProgress = new Set<string>();
+      const mathematicallyEliminated = new Set<string>();
+      
+      predictions.forEach((p) => {
+        const val = p[targetStageKey as keyof Prediction] as number;
+        if (val === 1.0) {
+          guaranteedProgress.add(p.teamId);
+        } else if (val === 0.0) {
+          mathematicallyEliminated.add(p.teamId);
+        }
+      });
+      
+      return {
+        guaranteedProgress,
+        mathematicallyEliminated,
+        guaranteedWinGroup: new Set<string>(),
+        eliminatedWinGroup: new Set<string>(),
+      };
+    }
+  }, [predictions, isGroupStage, activeResults, activeFixtures, activeRunDescription, simpleTeams]);
 
   const isEliminatedMap: { [teamId: string]: boolean } = {};
   predictions.forEach((p) => {
-    isEliminatedMap[p.teamId] = !getIsActive(p);
+    isEliminatedMap[p.teamId] = mathStatus.mathematicallyEliminated.has(p.teamId);
   });
 
-  // Helper to format probabilities
-  // val===0 means 0 of 10,000 simulations → always "—" (truly impossible)
-  // val===1 means all 10,000 simulations → always "100%" (truly guaranteed)
-  // No fixture lookups needed — the simulation values tell us everything.
-  const formatProbability = (val: number) => {
-    if (val === 0) return '—';
-    if (val === 1) return '100%';
+  const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) => {
+    let isGuaranteed = false;
+    let isEliminated = false;
 
-    const percentage = val * 100;
-    if (percentage < 0.5) return '<1%';
-    if (percentage >= 99.5) return '>99%';
-    return `${Math.round(percentage)}%`;
+    if (col === 'winGroup') {
+      if (isGroupStage) {
+        isGuaranteed = mathStatus.guaranteedWinGroup.has(teamId);
+        isEliminated = mathStatus.eliminatedWinGroup.has(teamId);
+      } else {
+        isGuaranteed = val === 1.0;
+        isEliminated = val === 0.0;
+      }
+    } else if (
+      col === 'roundOf32' ||
+      col === 'roundOf16' ||
+      col === 'quarterfinals' ||
+      col === 'semifinals' ||
+      col === 'final' ||
+      col === 'champions'
+    ) {
+      const targetStageKey = getTargetStageKey(activeRunDescription);
+      const stages = ['roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'];
+      const targetIndex = stages.indexOf(targetStageKey);
+      const colIndex = stages.indexOf(col);
+
+      if (colIndex >= targetIndex) {
+        isEliminated = mathStatus.mathematicallyEliminated.has(teamId);
+        if (colIndex === targetIndex) {
+          isGuaranteed = mathStatus.guaranteedProgress.has(teamId);
+        }
+      } else {
+        isGuaranteed = val > 0.5;
+        isEliminated = val <= 0.5;
+      }
+    }
+
+    if (isEliminated) return 0.0;
+    if (isGuaranteed) return 1.0;
+
+    if (val === 0.0) return 0.0001;
+    if (val === 1.0) return 0.9999;
+
+    return Math.max(0.0001, Math.min(0.9999, val));
   };
 
+  const formatProbability = (val: number, teamId: string, col: SortColumn) => {
+    const eff = getEffectiveProbability(val, teamId, col);
+    if (eff === 0.0) return '—';
+    if (eff === 1.0) return '100%';
+    if (eff <= 0.005) return '<1%';
+    if (eff >= 0.995) return '>99%';
+    return `${Math.round(eff * 100)}%`;
+  };
+
+  // Sort predictions based on whether it is group stage or knockout stage
+  const sortedPredictions = React.useMemo(() => {
+    return [...filteredPredictions].sort((a, b) => {
+      // If user has selected a sort column, use that
+      if (sortColumn) {
+        let cmp = 0;
+        if (sortColumn === 'team') {
+          cmp = a.team.name.localeCompare(b.team.name);
+        } else if (sortColumn === 'group') {
+          cmp = (a.team.group || '').localeCompare(b.team.group || '') || 
+                (getEffectiveProbability(b.champions, b.teamId, 'champions') - getEffectiveProbability(a.champions, a.teamId, 'champions'));
+        } else if (sortColumn === 'elo') {
+          cmp = a.team.currentElo - b.team.currentElo;
+        } else {
+          cmp = getEffectiveProbability(a[sortColumn] as number, a.teamId, sortColumn) - 
+                getEffectiveProbability(b[sortColumn] as number, b.teamId, sortColumn);
+        }
+        return sortDir === 'desc' ? -cmp : cmp;
+      }
+
+      // Default: group stage → group first, then success metrics
+      if (isGroupStage) {
+        const groupA = a.team.group || '';
+        const groupB = b.team.group || '';
+        if (groupA !== groupB) {
+          return groupA.localeCompare(groupB);
+        }
+      }
+      // Sort by success metrics descending using effective probabilities
+      return (
+        (getEffectiveProbability(b.champions, b.teamId, 'champions') - getEffectiveProbability(a.champions, a.teamId, 'champions')) ||
+        (getEffectiveProbability(b.final, b.teamId, 'final') - getEffectiveProbability(a.final, a.teamId, 'final')) ||
+        (getEffectiveProbability(b.semifinals, b.teamId, 'semifinals') - getEffectiveProbability(a.semifinals, a.teamId, 'semifinals')) ||
+        (getEffectiveProbability(b.quarterfinals, b.teamId, 'quarterfinals') - getEffectiveProbability(a.quarterfinals, a.teamId, 'quarterfinals')) ||
+        (getEffectiveProbability(b.roundOf16, b.teamId, 'roundOf16') - getEffectiveProbability(a.roundOf16, a.teamId, 'roundOf16')) ||
+        (getEffectiveProbability(b.roundOf32, b.teamId, 'roundOf32') - getEffectiveProbability(a.roundOf32, a.teamId, 'roundOf32')) ||
+        (getEffectiveProbability(b.winGroup, b.teamId, 'winGroup') - getEffectiveProbability(a.winGroup, a.teamId, 'winGroup')) ||
+        b.team.currentElo - a.team.currentElo
+      );
+    });
+  }, [filteredPredictions, sortColumn, sortDir, isGroupStage, mathStatus]);
+
   // Helper to calculate cell background style (green-white gradient overlay)
-  const getCellBgStyle = (val: number, text: string) => {
+  const getCellBgStyle = (val: number, text: string, teamId?: string) => {
     if (text === '—') return {};
-    const effectiveVal = text === '<1%' ? 0.005 : val;
+    if (teamId && isEliminatedMap[teamId]) return {}; // Suppress cell background coloring for eliminated teams
+    const effectiveVal = text === '<1%' ? 0.005 : (text === '100%' ? 1.0 : (text === '>99%' ? 0.9999 : val));
     // Linearly interpolate rgb color between white (255, 255, 255) and Green (34, 197, 94)
     const r = Math.round(255 - (255 - 34) * effectiveVal);
     const g = Math.round(255 - (255 - 197) * effectiveVal);
@@ -439,13 +554,13 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
                   {sortedPredictions.map((p) => {
                     const isEliminated = isEliminatedMap[p.teamId];
-                    const winGroupTxt = formatProbability(p.winGroup);
-                    const roundOf32Txt = formatProbability(p.roundOf32);
-                    const roundOf16Txt = formatProbability(p.roundOf16);
-                    const quarterfinalsTxt = formatProbability(p.quarterfinals);
-                    const semifinalsTxt = formatProbability(p.semifinals);
-                    const finalTxt = formatProbability(p.final);
-                    const championsTxt = formatProbability(p.champions);
+                    const winGroupTxt = formatProbability(p.winGroup, p.teamId, 'winGroup');
+                    const roundOf32Txt = formatProbability(p.roundOf32, p.teamId, 'roundOf32');
+                    const roundOf16Txt = formatProbability(p.roundOf16, p.teamId, 'roundOf16');
+                    const quarterfinalsTxt = formatProbability(p.quarterfinals, p.teamId, 'quarterfinals');
+                    const semifinalsTxt = formatProbability(p.semifinals, p.teamId, 'semifinals');
+                    const finalTxt = formatProbability(p.final, p.teamId, 'final');
+                    const championsTxt = formatProbability(p.champions, p.teamId, 'champions');
 
                     return (
                       <tr key={p.id} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
@@ -470,26 +585,26 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                           {p.eloAtSimulation || p.team.currentElo}
                         </td>
                         {isGroupStage && (
-                          <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup, winGroupTxt)}>
+                          <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup, winGroupTxt, p.teamId)}>
                             {winGroupTxt}
                           </td>
                         )}
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32, roundOf32Txt)}>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32, roundOf32Txt, p.teamId)}>
                           {roundOf32Txt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16, roundOf16Txt)}>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16, roundOf16Txt, p.teamId)}>
                           {roundOf16Txt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals, quarterfinalsTxt)}>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals, quarterfinalsTxt, p.teamId)}>
                           {quarterfinalsTxt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals, semifinalsTxt)}>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals, semifinalsTxt, p.teamId)}>
                           {semifinalsTxt}
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final, finalTxt)}>
+                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final, finalTxt, p.teamId)}>
                           {finalTxt}
                         </td>
-                        <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions, championsTxt)}>
+                        <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions, championsTxt, p.teamId)}>
                           {championsTxt}
                         </td>
                       </tr>

@@ -16,7 +16,14 @@ export class WorldCup48Config implements TournamentConfig {
   ];
 
   getKnockoutMatchLocation(stageName: string, matchIndex: number): string | null {
-    return this.locationsWC[matchIndex % this.locationsWC.length];
+    let offset = 0;
+    if (stageName === 'roundOf16') offset = 16;
+    else if (stageName === 'quarterfinals') offset = 24;
+    else if (stageName === 'semifinals') offset = 28;
+    else if (stageName === 'final') offset = 30;
+    
+    const globalIndex = offset + matchIndex;
+    return this.locationsWC[globalIndex % this.locationsWC.length];
   }
 
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
