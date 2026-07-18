@@ -400,6 +400,7 @@ export class SimulatorEngine {
           final,
           semifinals,
           quarterfinals,
+          eloAtSimulation: Math.round(initialEloMap[teamId] ?? 0),
         },
       });
     }

@@ -59,18 +59,19 @@ model SimulationRun {
 
 // Stores the output of your simulation runs
 model Prediction {
-  id              Int           @id @default(autoincrement())
-  simulationRunId Int
-  teamId          String
-  tournament      String
-  winGroup        Float         @default(0.0)
-  roundOf32       Float         @default(0.0)
-  roundOf16       Float         @default(0.0)
-  champions       Float         // Percentage (0.0 to 1.0)
-  final           Float
-  semifinals      Float
-  quarterfinals   Float
-  updatedAt       DateTime      @default(now())
+  id                Int           @id @default(autoincrement())
+  simulationRunId   Int
+  teamId            String
+  tournament        String
+  winGroup          Float         @default(0.0)
+  roundOf32         Float         @default(0.0)
+  roundOf16         Float         @default(0.0)
+  champions         Float         // Percentage (0.0 to 1.0)
+  final             Float
+  semifinals        Float
+  quarterfinals     Float
+  eloAtSimulation   Int           @default(0) // ELO rating as of the simulation cutoff date
+  updatedAt         DateTime      @default(now())
 
   simulationRun   SimulationRun @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
   team            Team          @relation(fields: [teamId], references: [id])

@@ -23,6 +23,7 @@ interface Prediction {
   final: number;
   semifinals: number;
   quarterfinals: number;
+  eloAtSimulation: number;
   updatedAt: Date;
   team: Team;
 }
@@ -489,7 +490,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                           </td>
                         )}
                         <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">
-                          {p.team.currentElo}
+                          {p.eloAtSimulation || p.team.currentElo}
                         </td>
                         {isGroupStage && (
                           <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup, winGroupTxt)}>
