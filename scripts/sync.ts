@@ -166,7 +166,7 @@ run()
   .then(async () => {
     console.log('Database sync completed successfully.');
     
-    console.log('Running World Cup 2026 simulations via TypeScript engine...');
+    console.log('Running 2026 World Cup simulations via TypeScript engine...');
     const config = new WorldCup48Config();
 
     const milestones = [

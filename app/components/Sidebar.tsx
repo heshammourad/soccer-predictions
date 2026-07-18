@@ -9,7 +9,7 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const tournaments = [
-    { code: 'WC', name: 'World Cup 2026' },
+    { code: 'WC', name: '2026 World Cup' },
   ];
 
   const isActive = (path: string) => pathname === path;

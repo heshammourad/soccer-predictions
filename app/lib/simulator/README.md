@@ -11,7 +11,7 @@ This directory houses the TypeScript tournament simulation framework. It utilize
 * `math.ts`: Core probability equations. Generates score margins, calculates rating updates, and manages ELO formulas.
 * `config/`: Configuration adapters for individual tournaments.
   * `base.ts`: Standard tiebreakers and Head-to-Head (H2H) group sorting.
-  * `worldCup.ts`: World Cup 2026 adapter (12 groups, best 8 third-place qualifiers, 32-team knockout bracket).
+  * `worldCup.ts`: 2026 World Cup adapter (12 groups, best 8 third-place qualifiers, 32-team knockout bracket).
   * `worldCupMatchupScenarios.ts`: Matrix index lookup for matching World Cup third-place teams.
 
 ---

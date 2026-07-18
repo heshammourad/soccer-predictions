@@ -100,7 +100,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   const [simMessage, setSimMessage] = useState('');
 
   const tournamentNames: { [code: string]: string } = {
-    WC: 'World Cup 2026',
+    WC: '2026 World Cup',
   };
 
   const handleTournamentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -433,8 +433,9 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
       {activeTab === 'projections' && (
         <div className="space-y-6">
           {/* Filters Bar */}
-          <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
-            <div className="flex flex-col sm:flex-row gap-3 flex-1 max-w-xl">
+          <div className="flex flex-col gap-6">
+            {/* Top Row: Search & Dropdowns */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
               <div className="relative flex-1">
                 <input
                   type="text"
@@ -452,47 +453,50 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <div className="relative">
-                <select
-                  value={activeTournament}
-                  onChange={handleTournamentChange}
-                  className="w-full sm:w-56 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer"
-                >
-                  {Object.entries(tournamentNames).map(([code, name]) => (
-                    <option key={code} value={code} className="bg-slate-950 text-slate-300">
-                      {name}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative">
+                  <select
+                    value={activeTournament}
+                    onChange={handleTournamentChange}
+                    className="w-full sm:w-56 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer"
+                  >
+                    {Object.entries(tournamentNames).map(([code, name]) => (
+                      <option key={code} value={code} className="bg-slate-950 text-slate-300">
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                 </div>
-              </div>
-              <div className="relative">
-                <select
-                  value={selectedRunId || ''}
-                  onChange={(e) => setSelectedRunId(Number(e.target.value))}
-                  className="w-full sm:w-64 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer font-semibold font-sans"
-                >
-                  {simulationRuns.map((run) => (
-                    <option key={run.id} value={run.id} className="bg-slate-950 text-slate-300 font-sans">
-                      {run.description}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400 font-sans">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
+                <div className="relative">
+                  <select
+                    value={selectedRunId || ''}
+                    onChange={(e) => setSelectedRunId(Number(e.target.value))}
+                    className="w-full sm:w-64 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer font-semibold font-sans"
+                  >
+                    {simulationRuns.map((run) => (
+                      <option key={run.id} value={run.id} className="bg-slate-950 text-slate-300 font-sans">
+                        {run.description}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400 font-sans">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 items-center overflow-x-auto pb-1 sm:pb-0">
+            {/* Bottom Row: Group Selector */}
+            <div className="flex gap-2 items-center overflow-x-auto pb-4 border-b border-slate-900/40">
               <button
                 onClick={() => setSelectedGroup('ALL')}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+                className={`px-4 py-2 text-xs font-semibold rounded-lg transition shrink-0 ${
                   selectedGroup === 'ALL'
                     ? 'bg-indigo-600 text-white'
                     : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -504,7 +508,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 <button
                   key={g}
                   onClick={() => setSelectedGroup(g)}
-                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition ${
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition shrink-0 ${
                     selectedGroup === g
                       ? 'bg-indigo-600 text-white'
                       : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -634,16 +638,30 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                 {activeResults.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
-                    <div className="flex-1 text-right pr-4 font-semibold text-slate-200">
-                      {m.homeTeam?.name || m.homeTeamId}
+                    <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
+                      <span>{m.homeTeam?.name || m.homeTeamId}</span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getFlagUrl(m.homeTeamId)}
+                        alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
+                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                        loading="lazy"
+                      />
                     </div>
                     <div className="flex items-center gap-3 bg-slate-900/80 px-4 py-1.5 rounded-lg font-mono font-bold text-slate-100 border border-slate-800">
                       <span>{m.homeGoals}</span>
                       <span className="text-slate-600">:</span>
                       <span>{m.awayGoals}</span>
                     </div>
-                    <div className="flex-1 text-left pl-4 font-semibold text-slate-200">
-                      {m.awayTeam?.name || m.awayTeamId}
+                    <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-semibold text-slate-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getFlagUrl(m.awayTeamId)}
+                        alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
+                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                        loading="lazy"
+                      />
+                      <span>{m.awayTeam?.name || m.awayTeamId}</span>
                     </div>
                     <div className="text-[11px] text-slate-500 pl-4 w-28 text-right font-mono">
                       {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
@@ -668,14 +686,28 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                 {activeFixtures.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
-                    <div className="flex-1 text-right pr-4 font-medium text-slate-300">
-                      {m.homeTeam?.name || m.homeTeamId}
+                    <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-medium text-slate-300">
+                      <span>{m.homeTeam?.name || m.homeTeamId}</span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getFlagUrl(m.homeTeamId)}
+                        alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
+                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                        loading="lazy"
+                      />
                     </div>
                     <div className="px-3 py-1 bg-slate-800 text-slate-400 font-mono text-xs rounded border border-slate-800 uppercase tracking-wider font-semibold">
                       VS
                     </div>
-                    <div className="flex-1 text-left pl-4 font-medium text-slate-300">
-                      {m.awayTeam?.name || m.awayTeamId}
+                    <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-medium text-slate-300">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getFlagUrl(m.awayTeamId)}
+                        alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
+                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                        loading="lazy"
+                      />
+                      <span>{m.awayTeam?.name || m.awayTeamId}</span>
                     </div>
                     <div className="text-[11px] text-indigo-400 pl-4 w-28 text-right font-mono font-semibold">
                       {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
