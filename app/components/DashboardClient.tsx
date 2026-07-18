@@ -219,8 +219,10 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   });
 
   // Helper to format probabilities with the required strict conditions
-  const formatProbability = (val: number, teamId: string) => {
+  const formatProbability = (val: number, teamId: string, isEliminated: boolean = false, canStillChange: boolean = false) => {
     if (val === 0) {
+      // Eliminated teams always show — even if they have upcoming fixtures
+      if (isEliminated) return '—';
       // Check if team is still active in group stage or knockout stage
       const hasUpcomingGroup = activeFixtures.some(
         (f) => !f.isKnockout && (f.homeTeamId === teamId || f.awayTeamId === teamId)
@@ -235,12 +237,8 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     }
 
     if (val === 1) {
-      const hasUpcoming = activeFixtures.some(
-        (f) => f.homeTeamId === teamId || f.awayTeamId === teamId
-      );
-      if (hasUpcoming) {
-        return '>99%';
-      }
+      // Only show >99% if this specific metric can still change (i.e. the current stage)
+      if (canStillChange) return '>99%';
       return '100%';
     }
 
@@ -462,13 +460,18 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
                   {sortedPredictions.map((p) => {
                     const isEliminated = isEliminatedMap[p.teamId];
-                    const winGroupTxt = formatProbability(p.winGroup, p.teamId);
-                    const roundOf32Txt = formatProbability(p.roundOf32, p.teamId);
-                    const roundOf16Txt = formatProbability(p.roundOf16, p.teamId);
-                    const quarterfinalsTxt = formatProbability(p.quarterfinals, p.teamId);
-                    const semifinalsTxt = formatProbability(p.semifinals, p.teamId);
-                    const finalTxt = formatProbability(p.final, p.teamId);
-                    const championsTxt = formatProbability(p.champions, p.teamId);
+                    // For val===1 cells: only hedge to >99% for the *current* active-stage metric.
+                    // Past metrics that are already 100% locked show as 100%.
+                    const isCurrentStageGroupWin = isGroupStage && activeFixtures.some(f => !f.isKnockout && (f.homeTeamId === p.teamId || f.awayTeamId === p.teamId));
+                    const isCurrentStageR32 = activeFixtures.some(f => f.isKnockout && (f.homeTeamId === p.teamId || f.awayTeamId === p.teamId));
+                    const fmt = (val: number, canStillChange: boolean) => formatProbability(val, p.teamId, isEliminated, canStillChange);
+                    const winGroupTxt = fmt(p.winGroup, isCurrentStageGroupWin);
+                    const roundOf32Txt = fmt(p.roundOf32, isCurrentStageR32 || isCurrentStageGroupWin);
+                    const roundOf16Txt = fmt(p.roundOf16, false);
+                    const quarterfinalsTxt = fmt(p.quarterfinals, false);
+                    const semifinalsTxt = fmt(p.semifinals, false);
+                    const finalTxt = fmt(p.final, false);
+                    const championsTxt = fmt(p.champions, false);
 
                     return (
                       <tr key={p.id} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
