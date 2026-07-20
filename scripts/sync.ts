@@ -22,7 +22,9 @@ async function run() {
   await initTLS();
 
   const ratingsUrl = 'http://eloratings.net/World.tsv';
-  const resultsUrl = 'http://eloratings.net/2026_World_Cup_latest.tsv';
+  const latestResultsUrl = 'http://eloratings.net/2026_World_Cup_latest.tsv';
+  const completedResultsUrl = 'http://eloratings.net/2026_World_Cup_results.tsv';
+  const fallbackResultsUrl = 'http://eloratings.net/2026_World_Cup.tsv';
 
   console.log('Fetching latest data from eloratings.net...');
   const session = new Session({
@@ -31,12 +33,18 @@ async function run() {
   });
 
   try {
-    const [ratingsRes, resultsRes] = await Promise.all([
-      session.get(ratingsUrl),
-      session.get(resultsUrl)
-    ]);
-
+    const ratingsRes = await session.get(ratingsUrl);
     if (ratingsRes.status !== 200) throw new Error(`Failed to fetch ratings: ${ratingsRes.status}`);
+
+    let resultsRes = await session.get(latestResultsUrl);
+    if (resultsRes.status !== 200) {
+      console.log(`_latest.tsv returned HTTP ${resultsRes.status}, trying _results.tsv...`);
+      resultsRes = await session.get(completedResultsUrl);
+    }
+    if (resultsRes.status !== 200) {
+      console.log(`_results.tsv returned HTTP ${resultsRes.status}, trying fallback .tsv...`);
+      resultsRes = await session.get(fallbackResultsUrl);
+    }
     if (resultsRes.status !== 200) throw new Error(`Failed to fetch results: ${resultsRes.status}`);
 
     const ratingsData = await ratingsRes.text();
@@ -178,10 +186,34 @@ run()
       { name: 'Round of 16 Completed', date: new Date('2026-07-08T23:59:59Z') },
       { name: 'Quarterfinals Completed', date: new Date('2026-07-13T23:59:59Z') },
       { name: 'Semifinals Completed', date: new Date('2026-07-17T23:59:59Z') },
+      { name: 'Tournament Completed', date: new Date('2026-07-19T23:59:59Z') },
       { name: 'Current Projections', date: undefined }
     ];
 
     const now = new Date();
+
+    const historicalMilestones = milestones.filter((m): m is { name: string; date: Date } => m.date !== undefined);
+    const allHistoricalDatesPassed = historicalMilestones.every((m) => m.date <= now);
+
+    if (allHistoricalDatesPassed) {
+      const existingRunsCount = await prisma.simulationRun.count({
+        where: {
+          tournament: config.code,
+          description: { in: historicalMilestones.map((m) => m.name) }
+        }
+      });
+
+      if (existingRunsCount === historicalMilestones.length) {
+        console.log(`Tournament ${config.code} is complete and all historical milestones exist in DB. Skipping simulations.`);
+        await prisma.$disconnect();
+        await pool.end();
+        await dbPrisma.$disconnect();
+        if (dbPool) {
+          await dbPool.end();
+        }
+        return;
+      }
+    }
 
     for (const milestone of milestones) {
       if (milestone.date && milestone.date > now) {
