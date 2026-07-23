@@ -61,7 +61,7 @@ exports.getFileStats = (filename) => {
 exports.fetchData = async (pathname, cacheFile) => {
   if (forceReload || this.isFileCacheExpired(cacheFile)) {
     const timestamp = Date.now();
-    const url = `http://eloratings.net/${pathname}.tsv?_=${timestamp}`;
+    const url = `https://eloratings.net/${pathname}.tsv?_=${timestamp}`;
     let session;
     try {
       await ensureTlsInitialized();

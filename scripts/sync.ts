@@ -21,10 +21,10 @@ async function run() {
   console.log('Initializing TLS Client...');
   await initTLS();
 
-  const ratingsUrl = 'http://eloratings.net/World.tsv';
-  const latestResultsUrl = 'http://eloratings.net/2026_World_Cup_latest.tsv';
-  const completedResultsUrl = 'http://eloratings.net/2026_World_Cup_results.tsv';
-  const fallbackResultsUrl = 'http://eloratings.net/2026_World_Cup.tsv';
+  const ratingsUrl = 'https://eloratings.net/World.tsv';
+  const latestResultsUrl = 'https://eloratings.net/2026_World_Cup_latest.tsv';
+  const completedResultsUrl = 'https://eloratings.net/2026_World_Cup_results.tsv';
+  const fallbackResultsUrl = 'https://eloratings.net/2026_World_Cup.tsv';
 
   console.log('Fetching latest data from eloratings.net...');
   const session = new Session({

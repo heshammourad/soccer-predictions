@@ -16,7 +16,7 @@ async function run() {
 
   try {
     for (const conf of confederations) {
-      const url = `http://eloratings.net/${conf}.tsv`;
+      const url = `https://eloratings.net/${conf}.tsv`;
       console.log(`Fetching ${conf} teams from ${url}...`);
 
       const response = await session.get(url, {
