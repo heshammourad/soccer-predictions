@@ -32,7 +32,18 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm prisma generate
 
+      # node-tls-client@2.1.0 (unmaintained) downloads its native library from the
+      # bogdanfinn/tls-client "latest" release at runtime. v1.16.0 (2026-09-02) renamed
+      # every asset (tls-client-linux-ubuntu-amd64-<v>.so -> tls-client-xgo-<v>-linux-amd64.so),
+      # so the built-in downloader can no longer find it. Pre-place a pinned copy at the
+      # path it expects (os.tmpdir()/tls-client-x64.so) so it skips the broken download.
+      - name: Prefetch tls-client native library
+        run: |
+          curl -fsSL -o /tmp/tls-client-x64.so \
+            https://github.com/bogdanfinn/tls-client/releases/download/v1.16.0/tls-client-xgo-1.16.0-linux-amd64.so
+
       - name: Run Scraper & Simulation Engine
         run: pnpm exec tsx scripts/sync.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TMPDIR: /tmp
