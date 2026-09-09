@@ -7,8 +7,8 @@
   // pnpm is the only supported package manager. Enabling corepack makes the
   // `packageManager` field in package.json authoritative and stops Codespaces
   // from running its default `npm install` (which regenerates package-lock.json).
-  "onCreateCommand": "corepack enable",
-  "postCreateCommand": "corepack prepare --activate && pnpm install --frozen-lockfile",
+  "onCreateCommand": "sudo corepack enable",
+  "postCreateCommand": "sudo corepack prepare --activate && pnpm install --frozen-lockfile",
   "customizations": {
     "vscode": {
       "extensions": [
