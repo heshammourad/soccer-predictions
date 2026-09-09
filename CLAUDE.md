@@ -59,12 +59,12 @@ Two generators: `prisma-client` → `app/generated/prisma` (gitignored, the one 
 - Flags: `getFlagUrl` in `config/confederations.ts` maps eloratings.net 2-letter codes to `flagcdn.com` codes (many non-ISO special cases).
 - Styling: Tailwind v4 (`@tailwindcss/postcss`), dark slate palette throughout.
 
-### `nodejs/`
+### Database bootstrap (`prisma/seed.ts`)
 
-Legacy file-based (CSV/TSV) implementation of the same ELO/prediction idea, kept for historical data under `nodejs/src/data/` and the `update-match-results` skill (`nodejs/.agents/skills/`). Not part of the Next.js app or the current pipeline; `tsconfig.json` excludes it.
+One-shot bootstrap for an empty database: reads the TSV/CSV snapshots under `prisma/seed-data/` (`teams.csv`, `team_ratings`, `WC/{groups,results,fixtures}`) to create `Team` rows (incl. group assignments) and the full WC fixture list. `scripts/sync.ts` only *updates* existing teams/matches, so a fresh DB must be seeded before the first sync. Run with `pnpm prisma db seed`. Not part of the daily pipeline.
 
 ## Conventions
 
 - Team/tournament codes are eloratings.net's (2-letter team codes like `QA`, `CI`; tournament codes like `WC`, `EC`, `AC`).
 - To add a tournament: seed `Team`/`Match` rows, add a `TournamentConfig` in `config/`, wire it into `app/actions/simulate.ts` and `scripts/sync.ts`, add it to `tournamentNames` maps.
-- ESLint uses the flat config (`eslint.config.mjs`); `scripts/` and `nodejs/` are outside the TS project.
+- ESLint uses the flat config (`eslint.config.mjs`); `scripts/` is outside the TS project.

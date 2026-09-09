@@ -1,0 +1,20 @@
+{
+  "name": "soccer-predictions",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  // pnpm is the only supported package manager. Enabling corepack makes the
+  // `packageManager` field in package.json authoritative and stops Codespaces
+  // from running its default `npm install` (which regenerates package-lock.json).
+  "onCreateCommand": "corepack enable",
+  "postCreateCommand": "corepack prepare --activate && pnpm install --frozen-lockfile",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "Prisma.prisma"
+      ]
+    }
+  }
+}
