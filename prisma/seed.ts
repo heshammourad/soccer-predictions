@@ -13,7 +13,7 @@ const pool = new pg.Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-const DATA_DIR = path.join(__dirname, '../nodejs/src/data');
+const DATA_DIR = path.join(__dirname, 'seed-data');
 
 // Helper to read and unescape data files
 function readDataFile(filePath: string): string {

@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # JavaScript dependencies (pnpm). The npm ecosystem covers pnpm workspaces via pnpm-lock.yaml.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk updates into a single PR to keep the queue small.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions used by .github/workflows/daily-sync.yml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

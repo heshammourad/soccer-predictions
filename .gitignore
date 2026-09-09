@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+# pnpm is the only supported package manager (see packageManager in package.json);
+# npm/Codespaces sometimes regenerates this — never commit it
+/package-lock.json
 /.pnp
 .pnp.*
 .yarn/*

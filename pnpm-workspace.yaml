@@ -1,6 +1,5 @@
 packages:
   - .
-  - nodejs
 
 ignoredBuiltDependencies:
   - sharp
