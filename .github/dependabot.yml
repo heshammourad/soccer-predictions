@@ -6,6 +6,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      # @types/node is pinned to the Node major used in CI and the devcontainer (24).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       # Batch low-risk updates into a single PR to keep the queue small.
       minor-and-patch:
