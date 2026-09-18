@@ -130,6 +130,10 @@ export function sortGroupTeamsWithH2H(
     return resolved;
   };
 
+  if (teams.length === 0) {
+    return [];
+  }
+
   // First sort overall by points descending.
   const sortedByPoints = [...teams].sort((a, b) => b.points - a.points);
 
