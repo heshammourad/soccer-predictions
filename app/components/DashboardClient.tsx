@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { triggerSimulation } from '../actions/simulate';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
-import { TOURNAMENTS, getTournament } from '../lib/tournaments';
+import { TOURNAMENTS, finalMilestoneIfOver, getTournament } from '../lib/tournaments';
 
 interface Team {
   id: string;
@@ -72,7 +72,18 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [activeTab, setActiveTab] = useState<'projections' | 'matches'>('projections');
+  // Once every dated milestone has passed and the final one has been simulated,
+  // the live "Current Projections" run adds nothing (it would only repeat the
+  // final result), so it is hidden and the final run is the default.
+  const finalMilestone = finalMilestoneIfOver(tournament);
+  const completedRun = finalMilestone
+    ? simulationRuns.find(run => run.description === finalMilestone)
+    : undefined;
+  const visibleRuns = completedRun
+    ? simulationRuns.filter(run => run.description !== 'Current Projections')
+    : simulationRuns;
   const [selectedRunId, setSelectedRunId] = useState<number | null>(() => {
+    if (completedRun) return completedRun.id;
     const currentRun = simulationRuns.find(run => run.description === 'Current Projections');
     if (currentRun) return currentRun.id;
     return simulationRuns.length > 0 ? simulationRuns[simulationRuns.length - 1].id : null;
@@ -395,27 +406,29 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               {simMessage}
             </span>
           )}
-          <button
-            onClick={handleSimulate}
-            disabled={isPending}
-            className={`px-6 py-3 font-semibold text-white rounded-xl shadow-lg transition duration-200 text-center ${
-              isPending
-                ? 'bg-indigo-700/60 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20 hover:scale-[1.02]'
-            }`}
-          >
-            {isPending ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Simulating...
-              </span>
-            ) : (
-              'Run 10,000 Simulations'
-            )}
-          </button>
+          {!completedRun && (
+            <button
+              onClick={handleSimulate}
+              disabled={isPending}
+              className={`px-6 py-3 font-semibold text-white rounded-xl shadow-lg transition duration-200 text-center ${
+                isPending
+                  ? 'bg-indigo-700/60 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20 hover:scale-[1.02]'
+              }`}
+            >
+              {isPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Simulating...
+                </span>
+              ) : (
+                'Run 10,000 Simulations'
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -492,7 +505,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                     onChange={(e) => setSelectedRunId(Number(e.target.value))}
                     className="w-full sm:w-64 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer font-semibold font-sans"
                   >
-                    {simulationRuns.map((run) => (
+                    {visibleRuns.map((run) => (
                       <option key={run.id} value={run.id} className="bg-slate-950 text-slate-300 font-sans">
                         {run.description}
                       </option>

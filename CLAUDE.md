@@ -59,7 +59,7 @@ Two generators: `prisma-client` → `app/generated/prisma` (gitignored, the one 
 
 - `app/layout.tsx` → `Sidebar` + content. `app/page.tsx` = ELO rankings table (`RankingsClient`). `app/tournament/[code]/page.tsx` = projections dashboard (`DashboardClient`); only `WC` is a valid code (`tournamentNames` map, else `notFound()`).
 - Server components pass Prisma data to client components via `JSON.parse(JSON.stringify(...))` to strip non-serializable values.
-- `DashboardClient` lets the user pick a `SimulationRun` (milestone); `MILESTONE_DATES` there must stay aligned with the milestone list in `scripts/sync.ts` and the `asOfDate` cutoffs.
+- `DashboardClient` lets the user pick a `SimulationRun` (milestone); `MILESTONE_DATES` there must stay aligned with the milestone list in `scripts/sync.ts` and the `asOfDate` cutoffs. Once every dated milestone in a tournament's `milestoneDates` has passed and its last one has been simulated (`finalMilestoneIfOver` in `app/lib/tournaments.ts`), the dashboard hides `Current Projections` and the simulate button and defaults to that final run — so a tournament's final milestone must be listed there.
 - `app/actions/simulate.ts` — `triggerSimulation` Server Action runs a single live `Current Projections` simulation from the UI button.
 - Flags: `getFlagUrl` in `config/confederations.ts` maps eloratings.net 2-letter codes to `flagcdn.com` codes (many non-ISO special cases).
 - Styling: Tailwind v4 (`@tailwindcss/postcss`), dark slate palette throughout.

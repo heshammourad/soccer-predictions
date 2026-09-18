@@ -89,6 +89,7 @@ const NATIONS_LEAGUE_MILESTONE_DATES: TournamentDescriptor['milestoneDates'] = {
   'Matchday 6 Completed': '2026-11-17T23:59:59Z',
   'Playoffs & Quarterfinals Completed': '2027-03-30T23:59:59Z',
   'Semifinals Completed': '2027-06-10T23:59:59Z',
+  'Tournament Completed': '2027-06-13T23:59:59Z',
   'Current Projections': undefined,
 };
 
@@ -133,6 +134,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       'Round of 16 Completed': '2026-07-08T23:59:59Z',
       'Quarterfinals Completed': '2026-07-13T23:59:59Z',
       'Semifinals Completed': '2026-07-17T23:59:59Z',
+      'Tournament Completed': '2026-07-19T23:59:59Z',
       'Current Projections': undefined,
     },
     calculateMathStatus: calculateMathematicalStatus,
@@ -283,4 +285,16 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
 export function getTournament(code: string): TournamentDescriptor | undefined {
   const upper = code.toUpperCase();
   return TOURNAMENTS.find((t) => t.code === upper);
+}
+
+// Once every dated milestone has passed the tournament is over, and its last
+// dated milestone is the final result. Returns that milestone's name (the
+// undated "Current Projections" doesn't count), or null while any milestone is
+// still ahead. Mirrors the sync's own "all historical dates passed" check.
+export function finalMilestoneIfOver(tournament: TournamentDescriptor, now: Date = new Date()): string | null {
+  const dated = Object.entries(tournament.milestoneDates)
+    .filter((entry): entry is [string, string] => entry[1] !== undefined)
+    .map(([name, date]) => ({ name, time: new Date(date).getTime() }));
+  if (dated.length === 0 || dated.some((m) => m.time > now.getTime())) return null;
+  return dated.reduce((last, m) => (m.time > last.time ? m : last)).name;
 }
