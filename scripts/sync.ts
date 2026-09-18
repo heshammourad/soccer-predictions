@@ -20,6 +20,7 @@ import { TournamentConfig } from '../app/lib/simulator/types';
 import { pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
 import * as fs from 'fs';
 import * as path from 'path';
+import { readDataFile } from '../prisma/readDataFile';
 import { pool as dbPool, prisma as dbPrisma } from '../app/lib/db';
 
 const connectionString = process.env.DATABASE_URL;
@@ -96,7 +97,7 @@ function loadSeedFixtureDates(codes: string[]) {
   for (const code of codes) {
     const file = path.resolve(__dirname, `../prisma/seed-data/${code}/fixtures`);
     if (!fs.existsSync(file)) continue;
-    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    for (const line of readDataFile(file).split('\n')) {
       const fields = line.split('\t');
       if (fields.length < 6 || fields[5].trim() !== code || fields[2].trim() === '00') continue;
       const [year, month, day] = [fields[0].trim(), fields[1].trim().padStart(2, '0'), fields[2].trim().padStart(2, '0')];
@@ -295,8 +296,7 @@ async function warnOnIncompleteGroups(codes: string[]) {
     const fixturesPath = path.resolve(__dirname, `../prisma/seed-data/${code}/fixtures`);
     if (!fs.existsSync(groupsPath) || !fs.existsSync(fixturesPath)) continue;
     const groups: { [group: string]: string[] } = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
-    const seedFixtures = fs
-      .readFileSync(fixturesPath, 'utf8')
+    const seedFixtures = readDataFile(fixturesPath)
       .split('\n')
       .map((line) => line.split('\t'))
       .filter((f) => f.length >= 6 && f[5].trim() === code);

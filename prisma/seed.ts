@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
+import { readDataFile } from './readDataFile';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -14,26 +15,6 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 const DATA_DIR = path.join(__dirname, 'seed-data');
-
-// Helper to read and unescape data files
-function readDataFile(filePath: string): string {
-  try {
-    let raw = fs.readFileSync(filePath, 'latin1').trim();
-    if (raw.startsWith('"') && raw.endsWith('"')) {
-      raw = raw.slice(1, -1);
-      raw = raw
-        .replace(/\\r/g, '\r')
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\');
-    }
-    return raw;
-  } catch (e) {
-    console.error(`Error reading ${filePath}:`, e);
-    return '';
-  }
-}
 
 // Knockout stage start date per tournament, used to classify a seeded match
 // as a group/league-phase match vs. a knockout match. Add an entry here for
