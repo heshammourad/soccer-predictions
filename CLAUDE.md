@@ -19,9 +19,10 @@ pnpm prisma generate              # regenerate Prisma client after schema.prisma
 pnpm prisma migrate dev           # create/apply a migration locally
 pnpm exec tsx scripts/sync.ts     # full pipeline: scrape eloratings.net -> DB -> run all milestone simulations
 pnpm exec tsx scripts/fetch-confederations.ts   # rebuild app/lib/simulator/config/confederations.json
+pnpm test                         # vitest run — covers app/lib/simulator/ (engine, math, config)
 ```
 
-There is **no test suite**. Verify simulation changes by running `scripts/sync.ts` (or the Server Action) and inspecting the written `Prediction` rows.
+The Vitest suite only covers `app/lib/simulator/`. It characterizes simulation logic (group sorting, two-legged ties, dynamic hosts, rating math) but doesn't touch the DB, scraping, or UI — verify those changes by running `scripts/sync.ts` (or the Server Action) and inspecting the written `Prediction` rows.
 
 `DATABASE_URL` (Postgres connection string) must be set — via `.env` (loaded by `dotenv` in scripts and `prisma.config.ts`) locally, and the `DATABASE_URL` GitHub secret in CI. `app/lib/db.ts` returns a non-null `prisma`/`pool` even when the env var is missing, so a missing URL surfaces as a runtime error on first query.
 
