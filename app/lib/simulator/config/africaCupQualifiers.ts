@@ -1,5 +1,5 @@
 import { TournamentConfig, GroupStandings, Matchup, TeamStats, Match } from '../types';
-import { sortDoubleRoundRobinGroup } from './base';
+import { sortDoubleRoundRobinGroup, CAF_TIEBREAKERS } from './base';
 
 // 2027 Africa Cup of Nations qualifiers (eloratings.net code `FQ`): 12 groups
 // of 4 playing a double round-robin over six matchdays (Sep 2026 - Mar 2027).
@@ -30,7 +30,7 @@ export class AfricaCupQualifiersConfig implements TournamentConfig {
   }
 
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    return sortDoubleRoundRobinGroup(teams, matches, { awayGoals: true });
+    return sortDoubleRoundRobinGroup(teams, matches, CAF_TIEBREAKERS);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {

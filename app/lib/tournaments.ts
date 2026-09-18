@@ -35,6 +35,9 @@ export interface TournamentDescriptor {
   // otherwise hidden then, since for a knockout tournament "won the group"
   // stops being interesting; not so when it's a final outcome (promotion).
   keepGroupPhaseMilestoneAfterGroupStage?: boolean;
+  // Milestones where a high probability is bad news (relegation): shaded red
+  // instead of the usual green.
+  negativeMilestones?: string[];
   // Grey out and strike through teams the math status says are eliminated
   // (default true). Turn off when elimination from the headline ladder isn't
   // the interesting outcome (e.g. a team out of the title race can still be
@@ -131,6 +134,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
     },
     groupPhaseMilestone: 'winGroup',
     defaultSortMilestones: ['champions', 'final', 'semifinals', 'quarterfinals', 'winGroup'],
+    negativeMilestones: ['autoRelegated', 'relegated'],
     dimEliminatedTeams: false,
     // Official UEFA schedule: league phase 24 Sep - 17 Nov 2026 (6
     // matchdays), League A quarterfinals (two legs) 25-30 March 2027,
@@ -150,6 +154,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
     },
     groupPhaseMilestone: 'autoPromoted',
     defaultSortMilestones: ['promoted', 'autoPromoted'],
+    negativeMilestones: ['relegated'],
     keepGroupPhaseMilestoneAfterGroupStage: true,
     dimEliminatedTeams: false,
     milestoneDates: NATIONS_LEAGUE_MILESTONE_DATES,

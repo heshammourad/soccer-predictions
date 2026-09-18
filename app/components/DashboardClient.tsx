@@ -340,15 +340,19 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, sortColumn, sortDir, isGroupStage, mathStatus, tournament]);
 
-  // Helper to calculate cell background style (green-white gradient overlay)
-  const getCellBgStyle = (val: number, text: string, teamId?: string) => {
+  // Helper to calculate cell background style: a white-to-colour gradient
+  // overlay, green for outcomes worth having and red for negative ones
+  // (relegation).
+  const getCellBgStyle = (val: number, text: string, teamId?: string, milestone?: string) => {
     if (text === '—') return {};
     if (teamId && isEliminatedMap[teamId]) return {}; // Suppress cell background coloring for eliminated teams
     const effectiveVal = text === '<1%' ? 0.005 : (text === '100%' ? 1.0 : (text === '>99%' ? 0.9999 : val));
-    // Linearly interpolate rgb color between white (255, 255, 255) and Green (34, 197, 94)
-    const r = Math.round(255 - (255 - 34) * effectiveVal);
-    const g = Math.round(255 - (255 - 197) * effectiveVal);
-    const b = Math.round(255 - (255 - 94) * effectiveVal);
+    const isNegative = milestone !== undefined && tournament.negativeMilestones?.includes(milestone) === true;
+    // Linearly interpolate rgb color between white (255, 255, 255) and Green (34, 197, 94) or Red (248, 105, 107)
+    const [tr, tg, tb] = isNegative ? [248, 105, 107] : [34, 197, 94];
+    const r = Math.round(255 - (255 - tr) * effectiveVal);
+    const g = Math.round(255 - (255 - tg) * effectiveVal);
+    const b = Math.round(255 - (255 - tb) * effectiveVal);
     return {
       backgroundColor: `rgb(${r}, ${g}, ${b})`,
       color: '#020617', // high contrast dark text color for readability
@@ -590,7 +594,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                             <td
                               key={milestone}
                               className={`py-3 px-4 text-center font-mono ${isChampions ? 'font-bold' : 'font-semibold'}`}
-                              style={getCellBgStyle(val, txt, r.teamId)}
+                              style={getCellBgStyle(val, txt, r.teamId, milestone)}
                             >
                               {txt}
                             </td>
