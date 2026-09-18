@@ -43,7 +43,7 @@ export default function RankingsClient({ teams }: Props) {
   }));
 
   // Helper to render rating change indicators
-  const renderChange = (value: number | null, isRank = false) => {
+  const renderChange = (value: number | null) => {
     if (value === null || value === 0) {
       return <span className="text-slate-500 font-mono text-[11px]">-</span>;
     }
@@ -140,7 +140,7 @@ export default function RankingsClient({ teams }: Props) {
                     
                     {/* Rank Change */}
                     <td className="py-3.5 px-6 text-center">
-                      {renderChange(t.rankChange1Yr, true)}
+                      {renderChange(t.rankChange1Yr)}
                     </td>
 
                     {/* Confederation Rank */}

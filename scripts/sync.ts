@@ -426,12 +426,16 @@ run()
     try {
       await prisma.$disconnect();
       await pool.end();
-    } catch (e) {}
+    } catch {
+      // best-effort cleanup; the original error is already logged
+    }
     try {
       await dbPrisma.$disconnect();
       if (dbPool) {
         await dbPool.end();
       }
-    } catch (e) {}
+    } catch {
+      // best-effort cleanup; the original error is already logged
+    }
     process.exit(1);
   });
