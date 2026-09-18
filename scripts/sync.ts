@@ -116,6 +116,7 @@ async function fetchWithFallback(session: Session, urlPrefix: string): Promise<s
 // robust to a fixture having been rescheduled since it was synced.
 async function syncResults(resultsData: string, codes: string[], matchByPair: boolean): Promise<number> {
   let resultsCount = 0;
+  const claimedMatchIds = new Set<number>(); // see pickMatchForFeedRow
   for (const line of resultsData.split('\n')) {
     if (!line.trim()) continue;
     const fields = line.split('\t');
@@ -145,7 +146,8 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
       const existing = matchByPair
         ? pickMatchForFeedRow(
             await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament } }),
-            date
+            date,
+            claimedMatchIds
           )
         : await prisma.match.findFirst({
             where: { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament, date }
@@ -184,6 +186,7 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
 async function syncFixtures(fixturesData: string, codes: string[]): Promise<number> {
   const knownTeams = new Set((await prisma.team.findMany({ select: { id: true } })).map((t) => t.id));
   let count = 0;
+  const claimedMatchIds = new Set<number>(); // see pickMatchForFeedRow
   for (const line of fixturesData.split('\n')) {
     if (!line.trim()) continue;
     const fields = line.split('\t');
@@ -212,7 +215,8 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
 
     const existing = pickMatchForFeedRow(
       await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament } }),
-      date
+      date,
+      claimedMatchIds
     );
     if (existing) {
       // A played match is owned by the results sync.
@@ -262,6 +266,27 @@ async function ensureGroupAssignments(codes: string[]) {
       }
     }
     console.log(`Ensured ${count} ${code} group assignments.`);
+  }
+}
+
+// Every group of the global-feed tournaments is a double round-robin, so each
+// must hold exactly n * (n - 1) matches. A shortfall means fixtures went
+// missing (e.g. two feed rows merged into one) and would silently skew every
+// projection for the teams involved, so say so loudly.
+async function warnOnIncompleteGroups(codes: string[]) {
+  for (const code of codes) {
+    const groupsPath = path.resolve(__dirname, `../prisma/seed-data/${code}/groups`);
+    if (!fs.existsSync(groupsPath)) continue;
+    const groups: { [group: string]: string[] } = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+    for (const [group, teamIds] of Object.entries(groups)) {
+      const expected = teamIds.length * (teamIds.length - 1);
+      const actual = await prisma.match.count({
+        where: { tournament: code, homeTeamId: { in: teamIds }, awayTeamId: { in: teamIds } }
+      });
+      if (actual !== expected) {
+        console.warn(`WARNING: ${code} group ${group} has ${actual} matches in the database, expected ${expected}.`);
+      }
+    }
   }
 }
 
@@ -366,6 +391,7 @@ async function run() {
     }
 
     await ensureGroupAssignments(GLOBAL_FEED_CODES);
+    await warnOnIncompleteGroups(GLOBAL_FEED_CODES);
 
   } finally {
     console.log('Closing TLS session...');
