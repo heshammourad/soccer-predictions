@@ -5,6 +5,7 @@ import { SimulatorEngine } from '../lib/simulator/engine';
 import { WorldCup48Config } from '../lib/simulator/config/worldCup';
 import { NationsLeagueConfig } from '../lib/simulator/config/nationsLeague';
 import { AfricaCupQualifiersConfig } from '../lib/simulator/config/africaCupQualifiers';
+import { ConcacafLeagueAConfig, ConcacafLeagueBConfig, ConcacafLeagueCConfig } from '../lib/simulator/config/concacafNationsLeague';
 import { TournamentConfig } from '../lib/simulator/types';
 
 export async function triggerSimulation(tournamentCode: string) {
@@ -21,6 +22,12 @@ export async function triggerSimulation(tournamentCode: string) {
       config = new NationsLeagueConfig();
     } else if (code === 'FQ') {
       config = new AfricaCupQualifiersConfig();
+    } else if (code === 'CLA') {
+      config = new ConcacafLeagueAConfig();
+    } else if (code === 'CLB') {
+      config = new ConcacafLeagueBConfig();
+    } else if (code === 'CLC') {
+      config = new ConcacafLeagueCConfig();
     } else {
       throw new Error(`Simulation configuration not yet implemented for tournament code: ${tournamentCode}`);
     }

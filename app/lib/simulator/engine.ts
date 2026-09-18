@@ -1,6 +1,7 @@
 import type { Match as PrismaMatch } from '@/app/generated/prisma/client';
 import { prisma } from '../db';
-import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome } from './types';
+import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome, TieResult } from './types';
+import { decideByGoals, twoLeggedStats } from './ties';
 import { simulateResult, getLowerScore, calculateRatingChange } from './math';
 
 export class SimulatorEngine {
@@ -102,7 +103,14 @@ export class SimulatorEngine {
       });
     }
 
-    const tournamentTeamIds = Array.from(new Set(matches.flatMap((m) => [m.homeTeamId, m.awayTeamId])));
+    const knownTeamIds = new Set(teams.map((t) => t.id));
+    const additionalTeamIds = (this.config.additionalTeamIds ?? []).filter((id) => {
+      if (!knownTeamIds.has(id)) console.warn(`Ignoring additional team ${id}: not in the Team table.`);
+      return knownTeamIds.has(id);
+    });
+    const tournamentTeamIds = Array.from(
+      new Set([...matches.flatMap((m) => [m.homeTeamId, m.awayTeamId]), ...additionalTeamIds])
+    );
     const initialStandings: GroupStandings = {};
 
     this.config.groups.forEach((g) => {
@@ -273,7 +281,7 @@ export class SimulatorEngine {
       if (this.config.buildPlayoffTies && this.config.evaluatePlayoffMilestones) {
         const playoffOutcomes: PlayoffOutcome[] = [];
         this.groupIntoTies(this.config.buildPlayoffTies(rankedStandings, knockoutMatches)).forEach((tie) => {
-          const winnerId = this.resolveTwoLeggedTie(tie, knockoutMatches, simElo);
+          const { winnerId } = this.resolveTwoLeggedTie(tie, knockoutMatches, simElo);
           const teamA = tie[0].homeTeamId;
           const teamB = tie[0].awayTeamId;
           playoffOutcomes.push({
@@ -320,14 +328,17 @@ export class SimulatorEngine {
         }
 
         const nextStageName = this.config.knockoutStages[stageIndex + 1];
-        const winners: string[] = [];
+        let winners: string[] = [];
+        const stageResults: TieResult[] = [];
 
         for (let tIdx = 0; tIdx < ties.length; tIdx++) {
           const tieMatchups = ties[tIdx];
           let winner: string;
 
           if (tieMatchups.length === 2) {
-            winner = this.resolveTwoLeggedTie(tieMatchups, knockoutMatches, simElo);
+            const result = this.resolveTwoLeggedTie(tieMatchups, knockoutMatches, simElo);
+            stageResults.push(result);
+            winner = result.winnerId;
           } else {
             winner = this.resolveSingleKnockoutMatch(
               tieMatchups[0],
@@ -340,6 +351,9 @@ export class SimulatorEngine {
             );
           }
 
+          if (tieMatchups.length !== 2) {
+            stageResults.push({ winnerId: winner, teamAId: tieMatchups[0].homeTeamId, teamBId: tieMatchups[0].awayTeamId, stats: {} });
+          }
           winners.push(winner);
 
           if (accumulator[winner] && nextStageName && accumulator[winner][nextStageName] !== undefined) {
@@ -349,6 +363,16 @@ export class SimulatorEngine {
 
         if (ties.length === 1) {
           break;
+        }
+
+        // Some formats pair the next round by this round's results rather
+        // than by bracket position.
+        if (this.config.orderStageWinners) {
+          const ordered = this.config.orderStageWinners(currentStageName, stageResults);
+          if (ordered.length !== winners.length || ordered.some((id) => !winners.includes(id))) {
+            throw new Error(`orderStageWinners for ${currentStageName} must return the stage's winners, reordered.`);
+          }
+          winners = ordered;
         }
 
         const nextStageMatches: Matchup[] = [];
@@ -515,8 +539,9 @@ export class SimulatorEngine {
   }
 
   // Resolves a two-legged tie by simulating (or using real results for) each
-  // leg's actual scoreline and comparing aggregate goals, falling back to a
-  // penalty-probability coin flip on an aggregate draw. Known simplification:
+  // leg's actual scoreline and comparing aggregate goals (then away goals, if
+  // the config uses that rule), falling back to a penalty-probability coin
+  // flip on a level tie. Known simplification:
   // unlike single knockout matches, this doesn't check real subsequent-round
   // data to resolve a real aggregate draw (extra time / shootout) — it always
   // uses the ELO-weighted probability, since two legs' worth of real dates
@@ -526,7 +551,7 @@ export class SimulatorEngine {
     legs: Matchup[],
     knockoutMatches: Match[],
     simElo: { [teamId: string]: number }
-  ): string {
+  ): TieResult {
     const leg1 = legs.find((l) => l.tieLeg === 1) ?? legs[0];
     const leg2 = legs.find((l) => l.tieLeg === 2) ?? legs[1];
 
@@ -535,15 +560,11 @@ export class SimulatorEngine {
 
     const leg1Score = this.resolveLegGoals(leg1.homeTeamId, leg1.awayTeamId, knockoutMatches, simElo);
     const leg2Score = this.resolveLegGoals(leg2.homeTeamId, leg2.awayTeamId, knockoutMatches, simElo);
+    const stats = twoLeggedStats(teamA, teamB, leg1Score, leg2Score);
 
-    const aggregateA = leg1Score.homeGoals + leg2Score.awayGoals;
-    const aggregateB = leg1Score.awayGoals + leg2Score.homeGoals;
-
-    if (aggregateA > aggregateB) {
-      return teamA;
-    }
-    if (aggregateB > aggregateA) {
-      return teamB;
+    const decided = decideByGoals(leg1Score, leg2Score, this.config.twoLeggedAwayGoals ?? false);
+    if (decided) {
+      return { winnerId: decided === 'A' ? teamA : teamB, teamAId: teamA, teamBId: teamB, stats };
     }
 
     const ratingDiff = simElo[teamA] - simElo[teamB];
@@ -551,10 +572,8 @@ export class SimulatorEngine {
     const we = 1 / (Math.pow(10, -Math.abs(ratingDiff) / 400) + 1);
     const penaltyWe = 0.5 + (we - 0.5) / 4;
     const favWon = Math.random() <= penaltyWe;
-    if (isAFav) {
-      return favWon ? teamA : teamB;
-    }
-    return favWon ? teamB : teamA;
+    const winnerId = isAFav ? (favWon ? teamA : teamB) : favWon ? teamB : teamA;
+    return { winnerId, teamAId: teamA, teamBId: teamB, stats };
   }
 
   // Resolves one leg's scoreline: the real result if it's already been

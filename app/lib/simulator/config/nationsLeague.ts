@@ -1,5 +1,5 @@
 import { TournamentConfig, GroupStandings, Matchup, TeamStats, Match, League, PlayoffOutcome } from '../types';
-import { compareStats } from './base';
+import { rankAcrossGroups } from './base';
 import { NationsLeagueAConfig } from './nationsLeagueA';
 
 // 2026-27 UEFA Nations League, Leagues A-C simulated together in one Monte
@@ -45,17 +45,6 @@ const LEAGUES: League[] = [
 const NO_HOST_TEAMS = ['UA', 'IL', 'BY'];
 
 const groupsOf = (code: string) => LEAGUES.find((l) => l.code === code)!.groups;
-
-// Teams finishing in the given group position (1-based) in each of a
-// league's groups, best to worst by the cross-group ranking criteria
-// (points, goal difference, goals scored; remaining ties broken randomly).
-function rankAcrossGroups(standings: GroupStandings, groups: string[], position: number): TeamStats[] {
-  const teams = groups
-    .map((g) => standings[g]?.[position - 1])
-    .filter((t): t is TeamStats => Boolean(t))
-    .sort(() => Math.random() - 0.5);
-  return teams.sort(compareStats);
-}
 
 export class NationsLeagueConfig implements TournamentConfig {
   code = 'EN';

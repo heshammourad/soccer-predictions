@@ -588,7 +588,10 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                         </td>
                         {visibleMilestones.map((milestone) => {
                           const val = r.values[milestone] ?? 0;
-                          const txt = formatProbability(val, r.teamId, milestone);
+                          // A team with no group (e.g. CONCACAF League A's four
+                          // seeds) can't win one, so the cell doesn't apply.
+                          const noGroup = milestone === tournament.groupPhaseMilestone && !r.group;
+                          const txt = noGroup ? '—' : formatProbability(val, r.teamId, milestone);
                           const isChampions = milestone === championsMilestone;
                           return (
                             <td

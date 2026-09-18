@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
+import { readDataFile } from './readDataFile';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -15,26 +16,6 @@ const prisma = new PrismaClient({ adapter });
 
 const DATA_DIR = path.join(__dirname, 'seed-data');
 
-// Helper to read and unescape data files
-function readDataFile(filePath: string): string {
-  try {
-    let raw = fs.readFileSync(filePath, 'latin1').trim();
-    if (raw.startsWith('"') && raw.endsWith('"')) {
-      raw = raw.slice(1, -1);
-      raw = raw
-        .replace(/\\r/g, '\r')
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\');
-    }
-    return raw;
-  } catch (e) {
-    console.error(`Error reading ${filePath}:`, e);
-    return '';
-  }
-}
-
 // Knockout stage start date per tournament, used to classify a seeded match
 // as a group/league-phase match vs. a knockout match. Add an entry here for
 // each tournament with a knockout phase.
@@ -43,6 +24,9 @@ const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   ENA: new Date('2027-03-25'), // first League A quarterfinal leg
   ENB: new Date('2027-03-25'), // promotion/relegation playoffs (window assumed, as in scripts/sync.ts)
   ENC: new Date('2027-03-25'),
+  CLA: new Date('2026-11-01'), // League A quarterfinals, 9-17 Nov (group stage ends 5 Oct)
+  CLB: new Date('2027-03-01'), // League B Finals, March 2027 (group stage ends 17 Nov)
+  CLC: new Date('2027-03-01'), // League C Finals, March 2027 (group stage ends 6 Oct)
 };
 
 function isKnockoutMatch(tourney: string, date: Date): boolean {
@@ -136,7 +120,7 @@ async function main() {
 
   // 4. Ingest Matches (results and fixtures), and per-tournament group
   // assignments, for all available tournaments
-  const tournaments = ['WC', 'ENA', 'ENB', 'ENC', 'FQ'];
+  const tournaments = ['WC', 'ENA', 'ENB', 'ENC', 'FQ', 'CLA', 'CLB', 'CLC'];
   for (const tourney of tournaments) {
     const tourneyDir = path.join(DATA_DIR, tourney);
     if (!fs.existsSync(tourneyDir)) continue;

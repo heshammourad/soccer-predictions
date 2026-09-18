@@ -15,6 +15,7 @@ This directory houses the TypeScript tournament simulation framework. It utilize
   * `worldCupMatchupScenarios.ts`: Matrix index lookup for matching World Cup third-place teams.
   * `nationsLeagueA.ts`: 2026-27 UEFA Nations League A adapter (4 double round-robin groups, two-legged quarterfinals, Finals with a dynamically chosen host).
   * `africaCupQualifiers.ts`: 2027 Africa Cup of Nations qualifiers (12 double round-robin groups, top two qualify, hosts already qualified; `qualified` is the only milestone).
+  * `concacafNationsLeague.ts`: 2026-27 CONCACAF Nations League Leagues A, B and C (one config each; League A has seeded teams, two-legged quarter-finals and a Finals).
   * `nationsLeague.ts`: Leagues A-C simulated together, with the cross-league promotion/relegation playoffs (see below).
 
 ---
@@ -27,7 +28,15 @@ When outcomes in one tournament depend on another's (Nations League promotion/re
 * `buildPlayoffTies` / `evaluatePlayoffMilestones`: cross-league two-legged ties after the group phase, resolved by the same machinery as knockout ties. Prefer real drawn fixtures (passed in as `knownFixtures`) over an invented draw.
 * `hostsHomeMatch`: whether a home team actually gets the home-advantage boost (e.g. associations that cannot currently host). Applies to group fixtures and two-legged ties.
 
-`NationsLeagueConfig` (`config/nationsLeague.ts`) is the worked example. Its `code` is `'EN'`, which is not a database tournament code; results land under `ENA`/`ENB`/`ENC`.
+`NationsLeagueConfig` (`config/nationsLeague.ts`) is the worked example.
+
+### Other opt-in `TournamentConfig` hooks
+
+* `additionalTeamIds`: teams tracked (a milestone row each) although they play no group match, e.g. teams seeded straight into the knockout phase.
+* `twoLeggedAwayGoals`: a two-legged tie level on aggregate is decided by away goals before the shoot-out (`ties.ts`).
+* `orderStageWinners`: orders a round's winners before they are paired for the next round, for formats that seed the next round by results (each result carries both teams' records over the two legs) rather than bracket position. It must return the same winners, reordered.
+
+Group sorting helpers live in `config/base.ts`: `sortGroupTeamsWithH2H` / `sortDoubleRoundRobinGroup` (head-to-head first: FIFA, UEFA, CAF), `sortOverallThenH2H` (overall record first: Concacaf Nations League) and `rankAcrossGroups` (compare same-position teams across groups). Its `code` is `'EN'`, which is not a database tournament code; results land under `ENA`/`ENB`/`ENC`.
 
 ---
 

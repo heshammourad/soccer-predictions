@@ -12,6 +12,10 @@ export interface SimpleMatch {
   isKnockout: boolean;
 }
 
+// Which criteria come first when ranking a group: head-to-head among the tied
+// teams (FIFA, UEFA, CAF), or the overall record (Concacaf Nations League).
+export type SortRules = 'h2hFirst' | 'overallFirst';
+
 function compareStatsObj(
   a: { points: number; gd: number; gf: number },
   b: { points: number; gd: number; gf: number }
@@ -33,7 +37,8 @@ function compareStatsObj(
 // "guaranteed"/"eliminated" — see config/base.ts for the simulation's sort.
 function sortGroup(
   groupTeams: string[],
-  groupMatches: SimpleMatch[]
+  groupMatches: SimpleMatch[],
+  rules: SortRules = 'h2hFirst'
 ): string[][] {
   // Calculate overall stats for each team
   const stats: Record<string, { points: number; gd: number; gf: number; id: string }> = {};
@@ -163,6 +168,46 @@ function sortGroup(
 
     return result;
   };
+
+  if (rules === 'overallFirst') {
+    // Overall points, GD and goals scored first; teams still level are split
+    // by head-to-head points only, and whatever is left stays a tie (a range
+    // of positions), so nothing is ever claimed that a later criterion could
+    // overturn.
+    const level = (a: string, b: string) =>
+      stats[a].points === stats[b].points && stats[a].gd === stats[b].gd && stats[a].gf === stats[b].gf;
+    const byOverall = [...groupTeams].sort((a, b) => compareStatsObj(stats[a], stats[b]));
+    const overallGroups: string[][] = [];
+    byOverall.forEach((id, i) => {
+      if (i > 0 && level(byOverall[i - 1], id)) overallGroups[overallGroups.length - 1].push(id);
+      else overallGroups.push([id]);
+    });
+    const result: string[][] = [];
+    overallGroups.forEach((tied) => {
+      if (tied.length === 1) {
+        result.push(tied);
+        return;
+      }
+      const h2hPoints: Record<string, number> = {};
+      tied.forEach((id) => (h2hPoints[id] = 0));
+      groupMatches.forEach((m) => {
+        if (m.homeGoals === null || m.awayGoals === null) return;
+        if (h2hPoints[m.homeTeamId] === undefined || h2hPoints[m.awayTeamId] === undefined) return;
+        if (m.homeGoals > m.awayGoals) h2hPoints[m.homeTeamId] += 3;
+        else if (m.awayGoals > m.homeGoals) h2hPoints[m.awayTeamId] += 3;
+        else {
+          h2hPoints[m.homeTeamId] += 1;
+          h2hPoints[m.awayTeamId] += 1;
+        }
+      });
+      const byH2H = [...tied].sort((a, b) => h2hPoints[b] - h2hPoints[a]);
+      byH2H.forEach((id, i) => {
+        if (i > 0 && h2hPoints[byH2H[i - 1]] === h2hPoints[id]) result[result.length - 1].push(id);
+        else result.push([id]);
+      });
+    });
+    return result;
+  }
 
   // Group by overall points
   const sortedByPoints = [...groupTeams].sort((t1, t2) => stats[t2].points - stats[t1].points);
@@ -450,6 +495,8 @@ export interface GroupTop2Options {
   // matches than this. The enumeration below is 6^k per group, which is too
   // slow to run in the browser for a double round-robin early on.
   maxRemainingPerGroup?: number;
+  // Tiebreak order used to rank a group (default head-to-head first).
+  sortRules?: SortRules;
 }
 
 // Simpler group-phase status for tournaments where only the top 2 of each
@@ -541,7 +588,7 @@ export function calculateGroupTop2Status(
     const generate = (index: number, currentMatches: SimpleMatch[]) => {
       if (index === groupUnplayedMatches.length) {
         const allMatches = [...groupPlayedMatches, ...currentMatches];
-        const sorted = sortGroup(groupTeamsList, allMatches)
+        const sorted = sortGroup(groupTeamsList, allMatches, options.sortRules)
           .map(sub => sub.filter(id => !automatic.has(id)))
           .filter(sub => sub.length > 0);
 

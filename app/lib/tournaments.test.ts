@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getTournament } from './tournaments';
+import { AfricaCupQualifiersConfig } from './simulator/config/africaCupQualifiers';
+import { ConcacafLeagueAConfig, ConcacafLeagueBConfig, ConcacafLeagueCConfig, CNL_A_SEEDS } from './simulator/config/concacafNationsLeague';
 
 const groups: { [group: string]: string[] } = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, '../../prisma/seed-data/FQ/groups'), 'utf8')
@@ -49,5 +51,31 @@ describe('FQ dashboard status', () => {
     expect(status.mathematicallyEliminated.has('MA')).toBe(false);
     // The hosts stay guaranteed in every state.
     ['KE', 'TZ', 'UG'].forEach((host) => expect(status.guaranteedWinGroup.has(host)).toBe(true));
+  });
+});
+
+describe('dashboard descriptors match the server configs', () => {
+  const configs = [new AfricaCupQualifiersConfig(), new ConcacafLeagueAConfig(), new ConcacafLeagueBConfig(), new ConcacafLeagueCConfig()];
+  configs.forEach((config) => {
+    it(`${config.code}: same milestones and knockout stages, and a label for each milestone`, () => {
+      const descriptor = getTournament(config.code)!;
+      expect(descriptor.milestones).toEqual(config.milestones);
+      expect(descriptor.knockoutStages).toEqual(config.knockoutStages);
+      config.milestones.forEach((m) => expect(descriptor.milestoneLabels[m]).toBeTruthy());
+      (descriptor.negativeMilestones ?? []).forEach((m) => expect(config.milestones).toContain(m));
+    });
+  });
+});
+
+describe('CLA dashboard status', () => {
+  it('marks the four seeds guaranteed for the quarter-finals before any match, and nobody else', () => {
+    const groups = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../prisma/seed-data/CLA/groups'), 'utf8'));
+    const clTeams = [
+      ...Object.entries(groups as { [g: string]: string[] }).flatMap(([group, ids]) => ids.map((id) => ({ id, name: id, group }))),
+      ...CNL_A_SEEDS.map((id) => ({ id, name: id, group: null as string | null })),
+    ];
+    const status = getTournament('CLA')!.calculateMathStatus(clTeams, [], []);
+    expect([...status.guaranteedProgress].sort()).toEqual([...CNL_A_SEEDS].sort());
+    expect(status.mathematicallyEliminated.size).toBe(0);
   });
 });
