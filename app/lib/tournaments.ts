@@ -1,5 +1,6 @@
-import { calculateMathematicalStatus, calculateGroupTop2Status, SimpleTeam, SimpleMatch } from './simulator/mathematicalStatus';
+import { calculateMathematicalStatus, calculateGroupTop2Status, GroupTop2Options, SimpleTeam, SimpleMatch } from './simulator/mathematicalStatus';
 import { AFCON_HOSTS } from './simulator/config/africaCupQualifiers';
+import { CNL_A_SEEDS, CLA_MILESTONES, CLB_MILESTONES, CLC_MILESTONES, scheduleDates } from './simulator/config/concacafNationsLeague';
 
 export interface MathStatus {
   guaranteedProgress: Set<string>;
@@ -52,11 +53,29 @@ export interface TournamentDescriptor {
 // proved from the group table (direct promotion). Reaching a playoff or
 // avoiding relegation also depends on cross-group rankings, so nothing else is
 // reported as guaranteed or eliminated.
-const calculateWinGroupOnlyStatus: TournamentDescriptor['calculateMathStatus'] = (teams, results, fixtures) => ({
-  ...calculateGroupTop2Status(teams, results, fixtures),
-  guaranteedProgress: new Set<string>(),
-  mathematicallyEliminated: new Set<string>(),
-});
+const winGroupOnlyStatus =
+  (options: GroupTop2Options = {}): TournamentDescriptor['calculateMathStatus'] =>
+  (teams, results, fixtures) => ({
+    ...calculateGroupTop2Status(teams, results, fixtures, options),
+    guaranteedProgress: new Set<string>(),
+    mathematicallyEliminated: new Set<string>(),
+  });
+const calculateWinGroupOnlyStatus = winGroupOnlyStatus();
+
+// Concacaf Nations League groups are ranked on the overall record first, and
+// the status enumeration is 6^k per group, so it's skipped until at most six
+// matches of a group remain (League A groups have twelve).
+const CNL_STATUS_OPTIONS: GroupTop2Options = { sortRules: 'overallFirst', maxRemainingPerGroup: 6 };
+
+// League A: the top two of each group reach the quarter-finals, where the four
+// seeds (who play no group match) are already waiting, so they are guaranteed.
+const calculateCnlAStatus: TournamentDescriptor['calculateMathStatus'] = (teams, results, fixtures) => {
+  const status = calculateGroupTop2Status(teams, results, fixtures, CNL_STATUS_OPTIONS);
+  CNL_A_SEEDS.forEach((id) => {
+    if (teams.some((t) => t.id === id)) status.guaranteedProgress.add(id);
+  });
+  return status;
+};
 
 // Leagues A-C are simulated together (the promotion/relegation playoffs link
 // them), with one run per league; they share this milestone schedule.
@@ -201,6 +220,63 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       'Current Projections': undefined,
     },
     calculateMathStatus: calculateAfconQualifierStatus,
+  },
+  {
+    code: 'CLA',
+    name: '2026-27 CONCACAF Nations League A',
+    milestones: ['winGroup', 'quarterfinals', 'semifinals', 'final', 'champions', 'relegated'],
+    knockoutStages: ['quarterfinals', 'semifinals', 'final', 'champions'],
+    milestoneLabels: {
+      winGroup: 'Win Group',
+      quarterfinals: 'Quarterfinals',
+      semifinals: 'Semifinals (Gold Cup)',
+      final: 'Finalist',
+      champions: 'Champion',
+      relegated: 'Relegation',
+    },
+    groupPhaseMilestone: 'winGroup',
+    defaultSortMilestones: ['champions', 'final', 'semifinals', 'quarterfinals', 'winGroup'],
+    negativeMilestones: ['relegated'],
+    dimEliminatedTeams: false,
+    // Two groups of six (4 matches each, 24 Sep - 5 Oct); the top two join the
+    // four seeds in the quarter-finals (9-17 Nov); Finals 25-28 Mar 2027.
+    // Reaching the semi-finals means winning a quarter-final, which qualifies
+    // for the 2027 Gold Cup.
+    milestoneDates: scheduleDates(CLA_MILESTONES),
+    calculateMathStatus: calculateCnlAStatus,
+  },
+  {
+    code: 'CLB',
+    name: '2026-27 CONCACAF Nations League B',
+    milestones: ['promoted', 'relegated'],
+    knockoutStages: [],
+    milestoneLabels: {
+      promoted: 'Promotion (Gold Cup)',
+      relegated: 'Relegation',
+    },
+    groupPhaseMilestone: 'promoted',
+    defaultSortMilestones: ['promoted'],
+    negativeMilestones: ['relegated'],
+    keepGroupPhaseMilestoneAfterGroupStage: true,
+    dimEliminatedTeams: false,
+    milestoneDates: scheduleDates(CLB_MILESTONES),
+    calculateMathStatus: winGroupOnlyStatus(CNL_STATUS_OPTIONS),
+  },
+  {
+    code: 'CLC',
+    name: '2026-27 CONCACAF Nations League C',
+    milestones: ['winGroup', 'promoted'],
+    knockoutStages: [],
+    milestoneLabels: {
+      winGroup: 'Win Group',
+      promoted: 'Promotion',
+    },
+    groupPhaseMilestone: 'winGroup',
+    defaultSortMilestones: ['promoted', 'winGroup'],
+    keepGroupPhaseMilestoneAfterGroupStage: true,
+    dimEliminatedTeams: false,
+    milestoneDates: scheduleDates(CLC_MILESTONES),
+    calculateMathStatus: winGroupOnlyStatus(CNL_STATUS_OPTIONS),
   },
 ];
 

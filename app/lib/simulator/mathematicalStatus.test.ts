@@ -80,4 +80,24 @@ describe('calculateGroupTop2Status with an automatic qualifier', () => {
     expect(status.guaranteedWinGroup.has('B')).toBe(true);
     expect(status.eliminatedWinGroup.has('A')).toBe(true);
   });
+
+  it('ranks by the overall record before head-to-head with sortRules overallFirst', () => {
+    // A and B finish on 15 points, and B won the head-to-head on aggregate
+    // (see the test above), but A has the better overall goal difference. With
+    // overall-first rules A is the sure winner; head-to-head first says B.
+    const t: SimpleTeam[] = ['A', 'B', 'C', 'D'].map((id) => ({ id, name: id, group: 'G' }));
+    const results = [
+      played('A', 'B', 1, 0), played('B', 'A', 2, 0),
+      ...['C', 'D'].flatMap((x) => [
+        played('A', x, 5, 0), played(x, 'A', 0, 5), played('B', x, 1, 0), played(x, 'B', 0, 1),
+      ]),
+    ];
+    const fixtures = [unplayed('C', 'D'), unplayed('D', 'C')];
+    const overall = calculateGroupTop2Status(t, results, fixtures, { sortRules: 'overallFirst' });
+    expect(overall.guaranteedWinGroup.has('A')).toBe(true);
+    expect(overall.eliminatedWinGroup.has('B')).toBe(true);
+    const h2h = calculateGroupTop2Status(t, results, fixtures);
+    expect(h2h.guaranteedWinGroup.has('B')).toBe(true);
+    expect(h2h.eliminatedWinGroup.has('A')).toBe(true);
+  });
 });

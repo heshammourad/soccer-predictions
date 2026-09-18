@@ -112,10 +112,45 @@ export interface TournamentConfig {
   // Awards milestones from resolved playoff ties (winner/loser per tie).
   evaluatePlayoffMilestones?(outcomes: PlayoffOutcome[]): { [teamId: string]: string[] };
 
+  // Optional: teams to track (a milestone row each) although they play no
+  // group match, e.g. teams seeded straight into the knockout phase. Their
+  // ratings come from the Team table.
+  additionalTeamIds?: string[];
+
+  // Optional: two-legged ties level on aggregate are decided by away goals
+  // before extra time and penalties (which are modelled as a single weighted
+  // shoot-out).
+  twoLeggedAwayGoals?: boolean;
+
+  // Optional: orders the winners of a knockout round before they are paired
+  // for the next one (adjacent winners meet), for formats that seed the next
+  // round by results rather than bracket position. Receives the round's ties
+  // in bracket order and returns the winners' team ids in the order to pair.
+  orderStageWinners?(stageName: string, results: TieResult[]): string[];
+
   // Optional: whether the home team of a match actually hosts it (and so
   // gets the home-advantage rating boost). Defaults to true. Lets a config
   // encode teams that cannot host (or neutral-venue pairings).
   hostsHomeMatch?(homeTeamId: string, awayTeamId: string): boolean;
+}
+
+// A team's record in a knockout tie (both legs), for ranking the winners of a
+// round against each other.
+export interface TieTeamStats {
+  points: number;
+  goalDifference: number;
+  goalsFor: number;
+  awayGoals: number;
+}
+
+export interface TieResult {
+  winnerId: string;
+  // Team A hosts leg 1 of a two-legged tie (or is the home team of a single
+  // match).
+  teamAId: string;
+  teamBId: string;
+  // Empty for a single match.
+  stats: { [teamId: string]: TieTeamStats };
 }
 
 export interface League {

@@ -7,6 +7,15 @@ import { SimulatorEngine } from '../app/lib/simulator/engine';
 import { WorldCup48Config } from '../app/lib/simulator/config/worldCup';
 import { NationsLeagueConfig } from '../app/lib/simulator/config/nationsLeague';
 import { AfricaCupQualifiersConfig } from '../app/lib/simulator/config/africaCupQualifiers';
+import {
+  ConcacafLeagueAConfig,
+  ConcacafLeagueBConfig,
+  ConcacafLeagueCConfig,
+  CLA_MILESTONES,
+  CLB_MILESTONES,
+  CLC_MILESTONES,
+  MilestoneSchedule,
+} from '../app/lib/simulator/config/concacafNationsLeague';
 import { TournamentConfig } from '../app/lib/simulator/types';
 import { pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
 import * as fs from 'fs';
@@ -28,13 +37,13 @@ const RESULTS_SOURCES: { code: string; urlPrefix: string }[] = [
   { code: 'WC', urlPrefix: 'https://eloratings.net/2026_World_Cup' },
 ];
 
-// The Nations League divisions and the Africa Cup of Nations qualifiers (FQ)
+// The UEFA and CONCACAF Nations League divisions and the Africa Cup of Nations qualifiers (FQ)
 // aren't published under a per-tournament results file (a `<name>_latest.tsv`
 // lookup for them returns unrelated data). Their played matches show up in the
 // global recent-results feed and their upcoming matches (including drawn
 // playoff pairings, once announced) in the global fixtures feed, both tagged
 // with the tournament code.
-const GLOBAL_FEED_CODES = ['ENA', 'ENB', 'ENC', 'FQ'];
+const GLOBAL_FEED_CODES = ['ENA', 'ENB', 'ENC', 'FQ', 'CLA', 'CLB', 'CLC'];
 const GLOBAL_RESULTS_URL = 'https://eloratings.net/latest.tsv';
 const GLOBAL_FIXTURES_URL = 'https://eloratings.net/fixtures.tsv';
 
@@ -48,6 +57,9 @@ const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   // fixtures aren't published yet, so confirm the dates once they are.
   ENB: new Date('2027-03-25'),
   ENC: new Date('2027-03-25'),
+  CLA: new Date('2026-11-01'), // League A quarterfinals, 9-17 Nov (group stage ends 5 Oct)
+  CLB: new Date('2027-03-01'), // League B Finals, March 2027 (group stage ends 17 Nov)
+  CLC: new Date('2027-03-01'), // League C Finals, March 2027 (group stage ends 6 Oct)
 };
 
 // Some eloratings.net codes are reused by every edition of a recurring
@@ -56,6 +68,9 @@ const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
 // overwrite this one's; ignore anything dated before the edition starts.
 const EDITION_START: { [tournament: string]: Date } = {
   FQ: new Date('2026-09-01'),
+  CLA: new Date('2026-09-01'),
+  CLB: new Date('2026-09-01'),
+  CLC: new Date('2026-09-01'),
 };
 
 function isBeforeEdition(tourney: string, date: Date): boolean {
@@ -269,17 +284,24 @@ async function ensureGroupAssignments(codes: string[]) {
   }
 }
 
-// Every group of the global-feed tournaments is a double round-robin, so each
-// must hold exactly n * (n - 1) matches. A shortfall means fixtures went
-// missing (e.g. two feed rows merged into one) and would silently skew every
-// projection for the teams involved, so say so loudly.
+// A group must hold every match the seed data lists for it. A shortfall means
+// fixtures went missing (e.g. two feed rows merged into one), which would
+// silently skew every projection for the teams involved, so say so loudly. (The
+// count comes from the seed file rather than n * (n - 1) because not every group
+// is a full double round-robin: CONCACAF League A's groups are Swiss-style.)
 async function warnOnIncompleteGroups(codes: string[]) {
   for (const code of codes) {
     const groupsPath = path.resolve(__dirname, `../prisma/seed-data/${code}/groups`);
-    if (!fs.existsSync(groupsPath)) continue;
+    const fixturesPath = path.resolve(__dirname, `../prisma/seed-data/${code}/fixtures`);
+    if (!fs.existsSync(groupsPath) || !fs.existsSync(fixturesPath)) continue;
     const groups: { [group: string]: string[] } = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+    const seedFixtures = fs
+      .readFileSync(fixturesPath, 'utf8')
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter((f) => f.length >= 6 && f[5].trim() === code);
     for (const [group, teamIds] of Object.entries(groups)) {
-      const expected = teamIds.length * (teamIds.length - 1);
+      const expected = seedFixtures.filter((f) => teamIds.includes(f[3].trim()) && teamIds.includes(f[4].trim())).length;
       const actual = await prisma.match.count({
         where: { tournament: code, homeTeamId: { in: teamIds }, awayTeamId: { in: teamIds } }
       });
@@ -508,6 +530,15 @@ run()
       { name: 'Tournament Completed', date: new Date('2027-03-30T23:59:59Z') },
       { name: 'Current Projections', date: undefined }
     ]);
+
+    // CONCACAF Nations League: each league is simulated on its own. The
+    // schedules (and the dashboard's copy of them) live in
+    // config/concacafNationsLeague.ts.
+    const toMilestones = (schedule: MilestoneSchedule[]) =>
+      schedule.map((m) => ({ name: m.name, date: m.date ? new Date(m.date) : undefined }));
+    await runMilestonesForConfig(new ConcacafLeagueAConfig(), toMilestones(CLA_MILESTONES));
+    await runMilestonesForConfig(new ConcacafLeagueBConfig(), toMilestones(CLB_MILESTONES));
+    await runMilestonesForConfig(new ConcacafLeagueCConfig(), toMilestones(CLC_MILESTONES));
 
     // Disconnect clients and end pools
     await prisma.$disconnect();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareStats, sortGroupTeamsWithH2H, sortDoubleRoundRobinGroup, CAF_TIEBREAKERS, H2HMatch } from './base';
+import { compareStats, sortGroupTeamsWithH2H, sortDoubleRoundRobinGroup, sortOverallThenH2H, rankAcrossGroups, CAF_TIEBREAKERS, H2HMatch } from './base';
 import { TeamStats } from '../types';
 
 function makeTeam(overrides: Partial<TeamStats> & { teamId: string }): TeamStats {
@@ -169,5 +169,76 @@ describe('sortDoubleRoundRobinGroup', () => {
       ];
       expect(sortDoubleRoundRobinGroup(teams, matches, caf).map((t) => t.teamId)).toEqual(['C', 'A', 'B']);
     });
+  });
+});
+
+describe('sortOverallThenH2H (Concacaf Nations League rules)', () => {
+  const stats = (teamId: string, points: number, goalDifference: number, goalsFor: number) =>
+    makeTeam({ teamId, points, goalDifference, goalsFor, goalsAgainst: goalsFor - goalDifference });
+  const game = (home: string, away: string, homeGoals: number, awayGoals: number) => ({
+    id: 0, tournament: 'CLA', date: new Date('2026-09-25'), homeTeamId: home, awayTeamId: away,
+    homeGoals, awayGoals, isKnockout: false, location: home, ratingChange: 0,
+  });
+  const order = (teams: TeamStats[], matches: ReturnType<typeof game>[]) =>
+    sortOverallThenH2H(teams, matches).map((t) => t.teamId);
+
+  it('ranks overall points, goal difference, then goals scored before head-to-head', () => {
+    // A beat B home and away, but B is ahead overall on goal difference.
+    const matches = [game('A', 'B', 1, 0), game('B', 'A', 0, 1)];
+    expect(order([stats('A', 6, 0, 4), stats('B', 6, 3, 8)], matches)).toEqual(['B', 'A']);
+    // Level on goal difference: goals scored decides, still ahead of head-to-head.
+    expect(order([stats('A', 6, 2, 4), stats('B', 6, 2, 9)], matches)).toEqual(['B', 'A']);
+  });
+
+  it('uses head-to-head points once the overall record is level', () => {
+    const level = [stats('A', 6, 1, 5), stats('B', 6, 1, 5)];
+    for (let i = 0; i < 20; i++) {
+      // B won the only meeting, whichever way round the teams are listed.
+      expect(order(level, [game('B', 'A', 2, 1)])).toEqual(['B', 'A']);
+      expect(order([...level].reverse(), [game('B', 'A', 2, 1)])).toEqual(['B', 'A']);
+    }
+  });
+
+  it('breaks a two-team tie on head-to-head away goals, not goal difference', () => {
+    const level = [stats('A', 6, 0, 4), stats('B', 6, 0, 4)];
+    // A 3-1 B and B 1-0 A: each won once (head-to-head points 3-3). A has the
+    // better head-to-head goal difference (+1 v -1), which is ignored for two
+    // teams; B scored 1 away goal to A's 0, so B ranks first.
+    for (let i = 0; i < 20; i++) {
+      expect(order(level, [game('A', 'B', 3, 1), game('B', 'A', 1, 0)])).toEqual(['B', 'A']);
+    }
+  });
+
+  it('with three or more teams level uses head-to-head goal difference then goals, not away goals', () => {
+    const level = ['A', 'B', 'C'].map((id) => stats(id, 6, 0, 4));
+    // Each team wins one of these games and loses another (head-to-head points
+    // 3 each). Head-to-head goal difference then ranks A (+3), C (-1), B (-2).
+    const matches = [game('A', 'B', 4, 0), game('B', 'C', 2, 0), game('C', 'A', 1, 0)];
+    for (let i = 0; i < 20; i++) {
+      expect(order([...level].reverse(), matches)).toEqual(['A', 'C', 'B']);
+    }
+  });
+
+  it('draws lots when nothing separates the teams', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      seen.add(order([stats('A', 3, 0, 2), stats('B', 3, 0, 2)], []).join(''));
+    }
+    expect(seen).toEqual(new Set(['AB', 'BA']));
+  });
+
+  it('copes with teams that never met (a Swiss-style group)', () => {
+    expect(order([stats('A', 6, 0, 4), stats('B', 6, 0, 4), stats('C', 0, -9, 1)], [game('A', 'C', 1, 0)])).toHaveLength(3);
+  });
+});
+
+describe('rankAcrossGroups', () => {
+  it('ranks the teams finishing in a position across groups by points, GD, then goals scored', () => {
+    const standings = {
+      G1: [makeTeam({ teamId: 'W1', points: 9, goalDifference: 4, goalsFor: 6 })],
+      G2: [makeTeam({ teamId: 'W2', points: 9, goalDifference: 6, goalsFor: 7 })],
+      G3: [makeTeam({ teamId: 'W3', points: 7, goalDifference: 9, goalsFor: 9 })],
+    };
+    expect(rankAcrossGroups(standings, ['G1', 'G2', 'G3'], 1).map((t) => t.teamId)).toEqual(['W2', 'W1', 'W3']);
   });
 });

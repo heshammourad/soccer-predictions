@@ -1,4 +1,4 @@
-import { Match, TeamStats } from '../types';
+import { GroupStandings, Match, TeamStats } from '../types';
 
 export interface H2HMatch {
   team1: string;
@@ -262,4 +262,80 @@ export function sortDoubleRoundRobinGroup(
     typeof criterion === 'function' ? criterion : (teamId: string) => countsFor(teamId)[criterion]
   );
   return sortGroupTeamsWithH2H(teams, getMatchResult, { h2hAwayGoals, overallTiebreakers });
+}
+
+// Teams finishing in the given group position (1-based) in each of the given
+// groups, best to worst by the cross-group ranking criteria (points, goal
+// difference, goals scored; remaining ties broken randomly, as by a draw).
+export function rankAcrossGroups(standings: GroupStandings, groups: string[], position: number): TeamStats[] {
+  const teams = groups
+    .map((g) => standings[g]?.[position - 1])
+    .filter((t): t is TeamStats => Boolean(t))
+    .sort(() => Math.random() - 0.5);
+  return teams.sort(compareStats);
+}
+
+// Group sorting with the overall record first and head-to-head only as a
+// tiebreaker (Concacaf Nations League, regulations art. 12.6). Teams are ranked
+// by points, then goal difference, then goals scored, over all group matches.
+// Teams still level are then ranked on the matches between them (which may be
+// none, one or two per pair): head-to-head points; then, if more than two
+// teams are level, head-to-head goal difference and goals scored; if exactly
+// two are level, away goals scored in their matches. Whatever is still level
+// is drawn by lots (random). Fair-play points are not tracked, so that step is
+// skipped. The head-to-head criteria are applied once to the tied set rather
+// than again to a smaller set left over from it, which the rules don't say.
+export function sortOverallThenH2H(teams: TeamStats[], matches: Match[]): TeamStats[] {
+  const byId: { [teamId: string]: TeamStats } = {};
+  teams.forEach((t) => (byId[t.teamId] = t));
+
+  const headToHead = (tiedIds: string[]) => {
+    const stats: { [teamId: string]: { points: number; goalDifference: number; goalsFor: number; awayGoals: number } } = {};
+    tiedIds.forEach((id) => (stats[id] = { points: 0, goalDifference: 0, goalsFor: 0, awayGoals: 0 }));
+    matches.forEach((m) => {
+      if (m.homeGoals === null || m.awayGoals === null) return;
+      const home = stats[m.homeTeamId];
+      const away = stats[m.awayTeamId];
+      if (!home || !away) return;
+      home.goalsFor += m.homeGoals;
+      home.goalDifference += m.homeGoals - m.awayGoals;
+      away.goalsFor += m.awayGoals;
+      away.goalDifference += m.awayGoals - m.homeGoals;
+      away.awayGoals += m.awayGoals;
+      if (m.homeGoals > m.awayGoals) home.points += 3;
+      else if (m.awayGoals > m.homeGoals) away.points += 3;
+      else {
+        home.points += 1;
+        away.points += 1;
+      }
+    });
+    return stats;
+  };
+
+  const resolveTie = (tiedIds: string[]): string[] => {
+    const stats = headToHead(tiedIds);
+    const twoTeams = tiedIds.length === 2;
+    const compare = (a: string, b: string) => {
+      if (stats[a].points !== stats[b].points) return stats[b].points - stats[a].points;
+      if (twoTeams) return stats[b].awayGoals - stats[a].awayGoals;
+      if (stats[a].goalDifference !== stats[b].goalDifference) return stats[b].goalDifference - stats[a].goalDifference;
+      return stats[b].goalsFor - stats[a].goalsFor;
+    };
+    // Shuffle first so teams still level after every criterion (lots) end up
+    // in random order; the sort itself is stable.
+    return [...tiedIds].sort(() => Math.random() - 0.5).sort(compare);
+  };
+
+  const sorted = [...teams].sort(compareStats);
+  const result: TeamStats[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i + 1;
+    while (j < sorted.length && compareStats(sorted[i], sorted[j]) === 0) j++;
+    const tied = sorted.slice(i, j);
+    if (tied.length === 1) result.push(tied[0]);
+    else resolveTie(tied.map((t) => t.teamId)).forEach((id) => result.push(byId[id]));
+    i = j;
+  }
+  return result;
 }
