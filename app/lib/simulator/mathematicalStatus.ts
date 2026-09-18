@@ -478,7 +478,9 @@ export function calculateGroupTop2Status(
   });
 
   const remainingGroupMatches = fixtures.filter(f => !f.isKnockout);
-  const guaranteedProgress = new Set<string>();
+  // Automatic qualifiers are through whatever has (or hasn't) been played, so
+  // they're seeded here and survive the early returns below.
+  const guaranteedProgress = new Set<string>(teams.filter(t => t.group && automatic.has(t.id)).map(t => t.id));
   const mathematicallyEliminated = new Set<string>();
   const guaranteedWinGroup = new Set<string>();
   const eliminatedWinGroup = new Set<string>();
