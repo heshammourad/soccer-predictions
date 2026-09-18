@@ -136,7 +136,7 @@ async function main() {
 
   // 4. Ingest Matches (results and fixtures), and per-tournament group
   // assignments, for all available tournaments
-  const tournaments = ['WC', 'ENA', 'ENB', 'ENC'];
+  const tournaments = ['WC', 'ENA', 'ENB', 'ENC', 'FQ'];
   for (const tourney of tournaments) {
     const tourneyDir = path.join(DATA_DIR, tourney);
     if (!fs.existsSync(tourneyDir)) continue;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareStats, sortGroupTeamsWithH2H, H2HMatch } from './base';
+import { compareStats, sortGroupTeamsWithH2H, sortDoubleRoundRobinGroup, H2HMatch } from './base';
 import { TeamStats } from '../types';
 
 function makeTeam(overrides: Partial<TeamStats> & { teamId: string }): TeamStats {
@@ -84,5 +84,90 @@ describe('sortGroupTeamsWithH2H', () => {
 
     const sorted = sortGroupTeamsWithH2H(teams, getMatchResult);
     expect(sorted.map((t) => t.teamId)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('sortDoubleRoundRobinGroup', () => {
+  const match = (home: string, away: string, homeGoals: number, awayGoals: number) => ({
+    id: 0,
+    tournament: 'FQ',
+    date: new Date('2026-09-25'),
+    homeTeamId: home,
+    awayTeamId: away,
+    homeGoals,
+    awayGoals,
+    isKnockout: false,
+    location: home,
+    ratingChange: 0,
+  });
+
+  it('counts both meetings of a pair in the head-to-head tiebreak', () => {
+    // A and B are level on points and each won one meeting, so only the
+    // aggregate head-to-head goal difference separates them: B won 3-0 at home
+    // and lost 0-1 away (+2), so B ranks first. Counting only the first
+    // meeting (A's 1-0) would wrongly put A ahead.
+    const a = makeTeam({ teamId: 'A', points: 6 });
+    const b = makeTeam({ teamId: 'B', points: 6 });
+    const matches = [match('A', 'B', 1, 0), match('B', 'A', 3, 0)];
+    expect(sortDoubleRoundRobinGroup([a, b], matches).map((t) => t.teamId)).toEqual(['B', 'A']);
+  });
+
+  describe('with CAF away-goals criteria', () => {
+    const caf = { awayGoals: true };
+
+    it('breaks a head-to-head tie on away goals scored', () => {
+      // Each won at home (A 3-2, B 1-0): level on H2H points (3-3), GD (0)
+      // and goals scored (3-3), but B scored 2 away goals to A's 0.
+      const a = makeTeam({ teamId: 'A', points: 6 });
+      const b = makeTeam({ teamId: 'B', points: 6 });
+      const matches = [match('A', 'B', 3, 2), match('B', 'A', 1, 0)];
+      for (let i = 0; i < 20; i++) {
+        expect(sortDoubleRoundRobinGroup([a, b], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
+        expect(sortDoubleRoundRobinGroup([b, a], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
+      }
+    });
+
+    it('applies head-to-head away goals before overall goal difference', () => {
+      // A and B are level on head-to-head points, GD and goals scored, and A
+      // has the better overall goal difference. B scored the only away goal
+      // in the head-to-head, which outranks A's overall GD under CAF rules;
+      // without the away-goals criterion A's overall GD decides.
+      const a = makeTeam({ teamId: 'A', points: 6, goalDifference: 5, goalsFor: 8 });
+      const b = makeTeam({ teamId: 'B', points: 6, goalDifference: 0, goalsFor: 3 });
+      const matches = [match('A', 'B', 2, 1), match('B', 'A', 1, 0)];
+      expect(sortDoubleRoundRobinGroup([a, b], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
+      expect(sortDoubleRoundRobinGroup([a, b], matches).map((t) => t.teamId)).toEqual(['A', 'B']);
+    });
+
+    it('falls back to overall away goals when everything before it is level', () => {
+      // A and B draw 1-1 both times (identical head-to-head, away goals
+      // included) and have identical overall stats; A scored 3 away goals over
+      // all matches and B just 1.
+      const a = makeTeam({ teamId: 'A', points: 6, goalDifference: 0, goalsFor: 4 });
+      const b = makeTeam({ teamId: 'B', points: 6, goalDifference: 0, goalsFor: 4 });
+      const matches = [
+        match('A', 'B', 1, 1),
+        match('B', 'A', 1, 1),
+        match('C', 'A', 0, 2),
+        match('D', 'B', 3, 0),
+      ];
+      for (let i = 0; i < 20; i++) {
+        expect(sortDoubleRoundRobinGroup([b, a], matches, caf).map((t) => t.teamId)).toEqual(['A', 'B']);
+      }
+    });
+
+    it('re-applies the head-to-head criteria to a subset that is still tied', () => {
+      // Three teams level on points. In the three-team mini-table C is
+      // clearly first and A, B are level on points, GD and goals scored, so
+      // the criteria are re-applied to A v B alone: level again until away
+      // goals, where A scored 2 (in the 2-2 at B) to B's 1.
+      const teams = ['A', 'B', 'C'].map((id) => makeTeam({ teamId: id, points: 6 }));
+      const matches = [
+        match('A', 'B', 1, 1), match('B', 'A', 2, 2),   // A-B: level on points, GD, goals
+        match('A', 'C', 0, 3), match('C', 'A', 3, 0),   // C beats A twice
+        match('B', 'C', 0, 3), match('C', 'B', 3, 0),   // C beats B twice
+      ];
+      expect(sortDoubleRoundRobinGroup(teams, matches, caf).map((t) => t.teamId)).toEqual(['C', 'A', 'B']);
+    });
   });
 });

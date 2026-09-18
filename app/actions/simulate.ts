@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { SimulatorEngine } from '../lib/simulator/engine';
 import { WorldCup48Config } from '../lib/simulator/config/worldCup';
 import { NationsLeagueConfig } from '../lib/simulator/config/nationsLeague';
+import { AfricaCupQualifiersConfig } from '../lib/simulator/config/africaCupQualifiers';
 import { TournamentConfig } from '../lib/simulator/types';
 
 export async function triggerSimulation(tournamentCode: string) {
@@ -18,6 +19,8 @@ export async function triggerSimulation(tournamentCode: string) {
       // Leagues A-C are simulated together (playoffs link them); one run is
       // written per league, so refresh all three pages.
       config = new NationsLeagueConfig();
+    } else if (code === 'FQ') {
+      config = new AfricaCupQualifiersConfig();
     } else {
       throw new Error(`Simulation configuration not yet implemented for tournament code: ${tournamentCode}`);
     }

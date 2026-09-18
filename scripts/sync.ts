@@ -6,7 +6,9 @@ import { Session, ClientIdentifier, initTLS, destroyTLS } from 'node-tls-client'
 import { SimulatorEngine } from '../app/lib/simulator/engine';
 import { WorldCup48Config } from '../app/lib/simulator/config/worldCup';
 import { NationsLeagueConfig } from '../app/lib/simulator/config/nationsLeague';
+import { AfricaCupQualifiersConfig } from '../app/lib/simulator/config/africaCupQualifiers';
 import { TournamentConfig } from '../app/lib/simulator/types';
+import { pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pool as dbPool, prisma as dbPrisma } from '../app/lib/db';
@@ -26,12 +28,13 @@ const RESULTS_SOURCES: { code: string; urlPrefix: string }[] = [
   { code: 'WC', urlPrefix: 'https://eloratings.net/2026_World_Cup' },
 ];
 
-// The Nations League divisions aren't published under a per-tournament results
-// file (a `<name>_latest.tsv` lookup for them returns unrelated data). Their
-// played matches show up in the global recent-results feed and their upcoming
-// matches (including drawn playoff pairings, once announced) in the global
-// fixtures feed, both tagged with the tournament code.
-const NATIONS_LEAGUE_CODES = ['ENA', 'ENB', 'ENC'];
+// The Nations League divisions and the Africa Cup of Nations qualifiers (FQ)
+// aren't published under a per-tournament results file (a `<name>_latest.tsv`
+// lookup for them returns unrelated data). Their played matches show up in the
+// global recent-results feed and their upcoming matches (including drawn
+// playoff pairings, once announced) in the global fixtures feed, both tagged
+// with the tournament code.
+const GLOBAL_FEED_CODES = ['ENA', 'ENB', 'ENC', 'FQ'];
 const GLOBAL_RESULTS_URL = 'https://eloratings.net/latest.tsv';
 const GLOBAL_FIXTURES_URL = 'https://eloratings.net/fixtures.tsv';
 
@@ -47,10 +50,49 @@ const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   ENC: new Date('2027-03-25'),
 };
 
+// Some eloratings.net codes are reused by every edition of a recurring
+// competition (FQ covers each Africa Cup qualifying cycle). Matches are keyed
+// by (tournament, home, away), so a row from an earlier edition would
+// overwrite this one's; ignore anything dated before the edition starts.
+const EDITION_START: { [tournament: string]: Date } = {
+  FQ: new Date('2026-09-01'),
+};
+
+function isBeforeEdition(tourney: string, date: Date): boolean {
+  const start = EDITION_START[tourney];
+  return start !== undefined && date < start;
+}
+
 function isKnockoutMatch(tourney: string, date: Date): boolean {
   const cutoff = KNOCKOUT_CUTOFFS[tourney];
   return cutoff !== undefined && date >= cutoff;
 }
+
+// eloratings.net dates some fixtures by month only (day "00"), which can't
+// separate matchdays played in the same window (Africa Cup qualifiers: two
+// matchdays in Nov 2026 and two in Mar 2027). prisma/seed-data/<code>/fixtures
+// records a date per fixture derived from the feed's ordering; a month-only
+// feed row takes the date of the seed row for the same pair and month.
+const SEED_FIXTURE_DATES = new Map<string, Date>();
+const seedFixtureKey = (tournament: string, home: string, away: string, year: string, month: string) =>
+  `${tournament}|${home}|${away}|${year}-${month}`;
+
+function loadSeedFixtureDates(codes: string[]) {
+  for (const code of codes) {
+    const file = path.resolve(__dirname, `../prisma/seed-data/${code}/fixtures`);
+    if (!fs.existsSync(file)) continue;
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+      const fields = line.split('\t');
+      if (fields.length < 6 || fields[5].trim() !== code || fields[2].trim() === '00') continue;
+      const [year, month, day] = [fields[0].trim(), fields[1].trim().padStart(2, '0'), fields[2].trim().padStart(2, '0')];
+      SEED_FIXTURE_DATES.set(
+        seedFixtureKey(code, fields[3].trim(), fields[4].trim(), year, month),
+        new Date(`${year}-${month}-${day}T12:00:00Z`)
+      );
+    }
+  }
+}
+loadSeedFixtureDates(GLOBAL_FEED_CODES);
 
 async function fetchWithFallback(session: Session, urlPrefix: string): Promise<string> {
   const urls = [`${urlPrefix}_latest.tsv`, `${urlPrefix}_results.tsv`, `${urlPrefix}.tsv`];
@@ -94,16 +136,20 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
       const m = month === '00' ? '06' : month;
       const d = day === '00' ? '15' : day;
       const date = new Date(`${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
+      if (isBeforeEdition(matchTournament, date)) continue;
 
       const location = fields[8] && fields[8].trim() ? fields[8].trim() : team1;
       const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
 
       // Check if match already exists
-      const existing = await prisma.match.findFirst({
-        where: matchByPair
-          ? { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament }
-          : { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament, date }
-      });
+      const existing = matchByPair
+        ? pickMatchForFeedRow(
+            await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament } }),
+            date
+          )
+        : await prisma.match.findFirst({
+            where: { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament, date }
+          });
 
       if (existing) {
         await prisma.match.update({
@@ -155,12 +201,19 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
 
     const month = fields[1].trim() === '00' ? '06' : fields[1].trim();
     const day = fields[2].trim() === '00' ? '15' : fields[2].trim();
-    const date = new Date(`${fields[0].trim()}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`);
+    let date = new Date(`${fields[0].trim()}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`);
+    // A feed date with no day is replaced by the matchday date recorded in the
+    // seed data, if any (see SEED_FIXTURE_DATES).
+    if (fields[2].trim() === '00') {
+      date = SEED_FIXTURE_DATES.get(seedFixtureKey(tournament, team1, team2, fields[0].trim(), month.padStart(2, '0'))) ?? date;
+    }
+    if (isBeforeEdition(tournament, date)) continue;
     const location = fields[6] && fields[6].trim() ? fields[6].trim() : null;
 
-    const existing = await prisma.match.findFirst({
-      where: { homeTeamId: team1, awayTeamId: team2, tournament }
-    });
+    const existing = pickMatchForFeedRow(
+      await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament } }),
+      date
+    );
     if (existing) {
       // A played match is owned by the results sync.
       if (existing.homeGoals === null) {
@@ -295,24 +348,24 @@ async function run() {
       console.log(`Synced ${resultsCount} ${source.code} match results.`);
     }
 
-    console.log('Fetching Nations League results and fixtures from eloratings.net...');
+    console.log('Fetching Nations League and Africa Cup qualifier results and fixtures from eloratings.net...');
     const nlResultsRes = await session.get(GLOBAL_RESULTS_URL);
     if (nlResultsRes.status === 200) {
-      const count = await syncResults(await nlResultsRes.text(), NATIONS_LEAGUE_CODES, true);
-      console.log(`Synced ${count} Nations League match results.`);
+      const count = await syncResults(await nlResultsRes.text(), GLOBAL_FEED_CODES, true);
+      console.log(`Synced ${count} global-feed match results.`);
     } else {
-      console.error(`Skipping Nations League results sync: HTTP ${nlResultsRes.status}`);
+      console.error(`Skipping global-feed results sync: HTTP ${nlResultsRes.status}`);
     }
 
     const nlFixturesRes = await session.get(GLOBAL_FIXTURES_URL);
     if (nlFixturesRes.status === 200) {
-      const count = await syncFixtures(await nlFixturesRes.text(), NATIONS_LEAGUE_CODES);
-      console.log(`Synced ${count} Nations League fixtures.`);
+      const count = await syncFixtures(await nlFixturesRes.text(), GLOBAL_FEED_CODES);
+      console.log(`Synced ${count} global-feed fixtures.`);
     } else {
-      console.error(`Skipping Nations League fixtures sync: HTTP ${nlFixturesRes.status}`);
+      console.error(`Skipping global-feed fixtures sync: HTTP ${nlFixturesRes.status}`);
     }
 
-    await ensureGroupAssignments(NATIONS_LEAGUE_CODES);
+    await ensureGroupAssignments(GLOBAL_FEED_CODES);
 
   } finally {
     console.log('Closing TLS session...');
@@ -410,6 +463,23 @@ run()
       { name: 'Playoffs & Quarterfinals Completed', date: new Date('2027-03-30T23:59:59Z') },
       { name: 'Semifinals Completed', date: new Date('2027-06-10T23:59:59Z') },
       { name: 'Tournament Completed', date: new Date('2027-06-13T23:59:59Z') },
+      { name: 'Current Projections', date: undefined }
+    ]);
+
+    // Group stage 24 Sep 2026 - 30 Mar 2027 (6 matchdays). The feed dates
+    // matchdays 3-6 by month only; their order comes from the feed's ordering
+    // (see prisma/seed-data/FQ/fixtures), with placeholder days inside the
+    // Nov 9-17 and Mar 22-30 windows. Revisit the cutoffs below once
+    // eloratings.net publishes the real days. Keep in sync with
+    // app/lib/tournaments.ts's FQ milestoneDates.
+    await runMilestonesForConfig(new AfricaCupQualifiersConfig(), [
+      { name: 'Start (Pre-tournament)', date: new Date('2026-09-23T23:59:59Z') },
+      { name: 'Matchday 1 Completed', date: new Date('2026-09-27T23:59:59Z') },
+      { name: 'Matchday 2 Completed', date: new Date('2026-10-07T23:59:59Z') },
+      { name: 'Matchday 3 Completed', date: new Date('2026-11-13T23:59:59Z') },
+      { name: 'Matchday 4 Completed', date: new Date('2026-11-17T23:59:59Z') },
+      { name: 'Matchday 5 Completed', date: new Date('2027-03-27T23:59:59Z') },
+      { name: 'Tournament Completed', date: new Date('2027-03-30T23:59:59Z') },
       { name: 'Current Projections', date: undefined }
     ]);
 

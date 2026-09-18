@@ -1,4 +1,4 @@
-import { TeamStats } from '../types';
+import { Match, TeamStats } from '../types';
 
 export interface H2HMatch {
   team1: string;
@@ -28,21 +28,32 @@ export function sortGroupTeamsStandard(teams: TeamStats[]): TeamStats[] {
   });
 }
 
+export interface H2HSortOptions {
+  // CAF-style away-goals criteria. When set, away goals scored count as a
+  // fourth head-to-head criterion (after points, GD and goals scored among
+  // the tied teams), and each team's away goals over all group matches
+  // (given here) break remaining ties after overall GD and goals scored.
+  // "Away" is the second-listed team of a match (H2HMatch.team2).
+  overallAwayGoals?: { [teamId: string]: number };
+}
+
 export function sortGroupTeamsWithH2H(
   teams: TeamStats[],
   // May return several matches for a pair (a double round-robin group), all
   // of which count towards the head-to-head mini-table.
-  getMatchResult: (teamA: string, teamB: string) => H2HMatch | H2HMatch[] | null
+  getMatchResult: (teamA: string, teamB: string) => H2HMatch | H2HMatch[] | null,
+  options: H2HSortOptions = {}
 ): TeamStats[] {
+  const overallAwayGoals = options.overallAwayGoals;
   const overallStatsMap: { [teamId: string]: TeamStats } = {};
   teams.forEach((t) => {
     overallStatsMap[t.teamId] = t;
   });
 
   const getH2HStats = (subset: string[]) => {
-    const stats: { [teamId: string]: { points: number; goalDifference: number; goalsFor: number } } = {};
+    const stats: { [teamId: string]: { points: number; goalDifference: number; goalsFor: number; awayGoals: number } } = {};
     subset.forEach((team) => {
-      stats[team] = { points: 0, goalDifference: 0, goalsFor: 0 };
+      stats[team] = { points: 0, goalDifference: 0, goalsFor: 0, awayGoals: 0 };
     });
 
     for (let i = 0; i < subset.length; i++) {
@@ -76,6 +87,13 @@ export function sortGroupTeamsWithH2H(
 
           stats[teamB].goalsFor += scoreB;
           stats[teamB].goalDifference += (scoreB - scoreA);
+
+          // team2 is the away side
+          if (match.team1 === teamA) {
+            stats[teamB].awayGoals += scoreB;
+          } else {
+            stats[teamA].awayGoals += scoreA;
+          }
         }
       }
     }
@@ -89,9 +107,14 @@ export function sortGroupTeamsWithH2H(
 
     const h2hStats = getH2HStats(subset);
 
-    const sortedSubset = [...subset].sort((a, b) => {
-      return compareStats(h2hStats[a], h2hStats[b]);
-    });
+    // Points, GD, goals scored among the tied teams, then (if enabled) away goals.
+    const compareH2H = (a: string, b: string) => {
+      const diff = compareStats(h2hStats[a], h2hStats[b]);
+      if (diff !== 0 || !overallAwayGoals) return diff;
+      return h2hStats[b].awayGoals - h2hStats[a].awayGoals;
+    };
+
+    const sortedSubset = [...subset].sort(compareH2H);
 
     const groups: string[][] = [];
     let currentGroup = [sortedSubset[0]];
@@ -99,14 +122,7 @@ export function sortGroupTeamsWithH2H(
     for (let i = 1; i < sortedSubset.length; i++) {
       const prev = sortedSubset[i - 1];
       const curr = sortedSubset[i];
-      const statsPrev = h2hStats[prev];
-      const statsCurr = h2hStats[curr];
-
-      if (
-        statsPrev.points === statsCurr.points &&
-        statsPrev.goalDifference === statsCurr.goalDifference &&
-        statsPrev.goalsFor === statsCurr.goalsFor
-      ) {
+      if (compareH2H(prev, curr) === 0) {
         currentGroup.push(curr);
       } else {
         groups.push(currentGroup);
@@ -124,6 +140,12 @@ export function sortGroupTeamsWithH2H(
         resolved.push(...resolvedSub);
       } else {
         const resolvedSub = [...group].sort((a, b) => {
+          if (overallAwayGoals) {
+            const diff = compareStats(overallStatsMap[a], overallStatsMap[b]);
+            if (diff !== 0) return diff;
+            const awayDiff = (overallAwayGoals[b] ?? 0) - (overallAwayGoals[a] ?? 0);
+            return awayDiff !== 0 ? awayDiff : Math.random() - 0.5;
+          }
           return sortGroupTeamsStandard([overallStatsMap[a], overallStatsMap[b]])[0].teamId === a ? -1 : 1;
         });
         resolved.push(...resolvedSub);
@@ -171,4 +193,41 @@ export function sortGroupTeamsWithH2H(
   });
 
   return finalSortedTeams;
+}
+
+// Group sorting for a double round-robin: every pair meets home and away, and
+// both matches count towards the head-to-head tiebreakers. With `awayGoals`,
+// the CAF criteria apply: head-to-head away goals, and overall away goals
+// after overall GD and goals scored.
+export function sortDoubleRoundRobinGroup(
+  teams: TeamStats[],
+  matches: Match[],
+  { awayGoals = false }: { awayGoals?: boolean } = {}
+): TeamStats[] {
+  const getMatchResult = (teamA: string, teamB: string) =>
+    matches
+      .filter(
+        (m) =>
+          ((m.homeTeamId === teamA && m.awayTeamId === teamB) ||
+            (m.homeTeamId === teamB && m.awayTeamId === teamA)) &&
+          m.homeGoals !== null &&
+          m.awayGoals !== null
+      )
+      .map((m) => ({
+        team1: m.homeTeamId,
+        team2: m.awayTeamId,
+        score1: m.homeGoals as number,
+        score2: m.awayGoals as number,
+      }));
+  let overallAwayGoals: { [teamId: string]: number } | undefined;
+  if (awayGoals) {
+    overallAwayGoals = {};
+    teams.forEach((t) => (overallAwayGoals![t.teamId] = 0));
+    matches.forEach((m) => {
+      if (m.awayGoals !== null && overallAwayGoals![m.awayTeamId] !== undefined) {
+        overallAwayGoals![m.awayTeamId] += m.awayGoals;
+      }
+    });
+  }
+  return sortGroupTeamsWithH2H(teams, getMatchResult, { overallAwayGoals });
 }

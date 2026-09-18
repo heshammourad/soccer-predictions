@@ -1,5 +1,5 @@
 import { TournamentConfig, GroupStandings, Matchup, TeamStats, Match } from '../types';
-import { sortGroupTeamsWithH2H } from './base';
+import { sortDoubleRoundRobinGroup } from './base';
 
 // 2026-27 UEFA Nations League A. League phase: 4 groups of 4
 // (A1-A4, 24 Sep - 17 Nov 2026); group winners + runners-up advance to
@@ -28,24 +28,7 @@ export class NationsLeagueAConfig implements TournamentConfig {
   }
 
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    // League-phase groups are double round-robins: every pair meets home and
-    // away, and both matches count towards head-to-head tiebreakers.
-    const getMatchResult = (teamA: string, teamB: string) =>
-      matches
-        .filter(
-          (m) =>
-            ((m.homeTeamId === teamA && m.awayTeamId === teamB) ||
-              (m.homeTeamId === teamB && m.awayTeamId === teamA)) &&
-            m.homeGoals !== null &&
-            m.awayGoals !== null
-        )
-        .map((m) => ({
-          team1: m.homeTeamId,
-          team2: m.awayTeamId,
-          score1: m.homeGoals as number,
-          score2: m.awayGoals as number,
-        }));
-    return sortGroupTeamsWithH2H(teams, getMatchResult);
+    return sortDoubleRoundRobinGroup(teams, matches);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {
