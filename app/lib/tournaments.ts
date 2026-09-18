@@ -71,20 +71,19 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       champions: 'Champion',
     },
     groupPhaseMilestone: 'winGroup',
-    // Approximate — the league phase runs 24 Sep - 17 Nov 2026 across 6
-    // matchdays; these boundaries should be reconciled against the actual
-    // seeded ENA fixture dates once the full schedule is loaded (see
-    // scripts/sync.ts's ENA milestone list, which should derive from the
-    // same source of truth).
+    // Official UEFA schedule: league phase 24 Sep - 17 Nov 2026 (6
+    // matchdays), League A quarterfinals (two legs) 25-30 March 2027,
+    // Finals (semifinals + third-place playoff/final) 9-13 June 2027.
     milestoneDates: {
       'Start (Pre-tournament)': '2026-09-23T23:59:59Z',
-      'Matchday 1 Completed': '2026-09-29T23:59:59Z',
-      'Matchday 2 Completed': '2026-10-04T23:59:59Z',
-      'Matchday 3 Completed': '2026-10-14T23:59:59Z',
-      'Matchday 4 Completed': '2026-10-17T23:59:59Z',
+      'Matchday 1 Completed': '2026-09-26T23:59:59Z',
+      'Matchday 2 Completed': '2026-09-29T23:59:59Z',
+      'Matchday 3 Completed': '2026-10-03T23:59:59Z',
+      'Matchday 4 Completed': '2026-10-06T23:59:59Z',
       'Matchday 5 Completed': '2026-11-14T23:59:59Z',
       'Matchday 6 Completed': '2026-11-17T23:59:59Z',
-      'Quarterfinals Completed': '2027-03-31T23:59:59Z',
+      'Quarterfinals Completed': '2027-03-30T23:59:59Z',
+      'Semifinals Completed': '2027-06-10T23:59:59Z',
       'Current Projections': undefined,
     },
     calculateMathStatus: calculateGroupTop2Status,

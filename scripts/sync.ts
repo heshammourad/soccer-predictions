@@ -32,7 +32,7 @@ const activeTournaments = RESULTS_SOURCES.map((s) => s.code);
 // as a group/league-phase match vs. a knockout match.
 const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   WC: new Date('2026-06-28'),
-  ENA: new Date('2026-11-18'), // league phase ends 2026-11-17; QFs are March 2027
+  ENA: new Date('2027-03-25'), // first League A quarterfinal leg
 };
 
 function isKnockoutMatch(tourney: string, date: Date): boolean {
@@ -271,19 +271,21 @@ run()
       { name: 'Current Projections', date: undefined }
     ]);
 
-    // Approximate matchday boundaries within the 24 Sep - 17 Nov 2026
-    // league phase; reconcile against the actual synced ENA fixture dates
-    // once the full schedule is loaded.
+    // Official UEFA schedule: league phase 24 Sep - 17 Nov 2026 (6
+    // matchdays), League A quarterfinals (two legs) 25-30 March 2027,
+    // Finals (semifinals + third-place playoff/final) 9-13 June 2027.
+    // Keep in sync with app/lib/tournaments.ts's ENA milestoneDates.
     await runMilestonesForConfig(new NationsLeagueAConfig(), [
       { name: 'Start (Pre-tournament)', date: new Date('2026-09-23T23:59:59Z') },
-      { name: 'Matchday 1 Completed', date: new Date('2026-09-29T23:59:59Z') },
-      { name: 'Matchday 2 Completed', date: new Date('2026-10-04T23:59:59Z') },
-      { name: 'Matchday 3 Completed', date: new Date('2026-10-14T23:59:59Z') },
-      { name: 'Matchday 4 Completed', date: new Date('2026-10-17T23:59:59Z') },
+      { name: 'Matchday 1 Completed', date: new Date('2026-09-26T23:59:59Z') },
+      { name: 'Matchday 2 Completed', date: new Date('2026-09-29T23:59:59Z') },
+      { name: 'Matchday 3 Completed', date: new Date('2026-10-03T23:59:59Z') },
+      { name: 'Matchday 4 Completed', date: new Date('2026-10-06T23:59:59Z') },
       { name: 'Matchday 5 Completed', date: new Date('2026-11-14T23:59:59Z') },
       { name: 'Matchday 6 Completed', date: new Date('2026-11-17T23:59:59Z') },
-      { name: 'Quarterfinals Completed', date: new Date('2027-03-31T23:59:59Z') },
-      { name: 'Tournament Completed', date: new Date('2027-06-08T23:59:59Z') },
+      { name: 'Quarterfinals Completed', date: new Date('2027-03-30T23:59:59Z') },
+      { name: 'Semifinals Completed', date: new Date('2027-06-10T23:59:59Z') },
+      { name: 'Tournament Completed', date: new Date('2027-06-13T23:59:59Z') },
       { name: 'Current Projections', date: undefined }
     ]);
 

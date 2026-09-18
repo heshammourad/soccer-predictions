@@ -40,7 +40,7 @@ function readDataFile(filePath: string): string {
 // each tournament with a knockout phase.
 const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   WC: new Date('2026-06-28'),
-  ENA: new Date('2026-11-18'), // league phase ends 2026-11-17; QFs are March 2027
+  ENA: new Date('2027-03-25'), // first League A quarterfinal leg
 };
 
 function isKnockoutMatch(tourney: string, date: Date): boolean {
