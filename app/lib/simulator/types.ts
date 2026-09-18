@@ -91,4 +91,43 @@ export interface TournamentConfig {
   // as that team's home venue for the rest of the iteration.
   dynamicHostStages?: string[];
   selectDynamicHost?(stageName: string, candidateTeamIds: string[]): string | null;
+
+  // Optional: simulate several tournaments (e.g. adjacent Nations League
+  // divisions) in one Monte Carlo pass, so cross-tournament ties such as
+  // promotion/relegation playoffs see the same iteration's group outcomes.
+  // sourceTournaments are the Match/TeamTournamentGroup tournament codes to
+  // load (default: [code]). leagues splits the results back out: one
+  // SimulationRun and set of Predictions is written per league code, each
+  // limited to that league's own milestones. `groups` and `milestones` on the
+  // config itself are then the union across leagues. Omit all of it for a
+  // single-tournament config.
+  sourceTournaments?: string[];
+  leagues?: League[];
+
+  // Optional: cross-league ties played after the group phase (e.g. promotion/
+  // relegation playoffs), resolved with the same two-legged machinery as
+  // knockout ties. knownFixtures are already-scheduled/played knockout
+  // Match rows (a real draw), which implementations should prefer.
+  buildPlayoffTies?(rankedStandings: GroupStandings, knownFixtures: Match[]): Matchup[];
+  // Awards milestones from resolved playoff ties (winner/loser per tie).
+  evaluatePlayoffMilestones?(outcomes: PlayoffOutcome[]): { [teamId: string]: string[] };
+
+  // Optional: whether the home team of a match actually hosts it (and so
+  // gets the home-advantage rating boost). Defaults to true. Lets a config
+  // encode teams that cannot host (or neutral-venue pairings).
+  hostsHomeMatch?(homeTeamId: string, awayTeamId: string): boolean;
+}
+
+export interface League {
+  code: string;
+  groups: string[];
+  milestones: string[];
+}
+
+export interface PlayoffOutcome {
+  stageName: string;
+  winnerId: string;
+  loserId: string;
+  // Hosts leg 1 (for a cross-league playoff, the lower-league team).
+  leg1HomeTeamId: string;
 }

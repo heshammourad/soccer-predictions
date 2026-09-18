@@ -9,6 +9,10 @@ describe('getWeight', () => {
     expect(getWeight('F')).toBe(20);
   });
 
+  it('uses the same K for every Nations League division as League A', () => {
+    ['ENA', 'ENB', 'ENC', 'EN'].forEach((code) => expect(getWeight(code)).toBe(30));
+  });
+
   it('falls back to 40 for unknown tournament codes', () => {
     expect(getWeight('NOT_A_REAL_CODE')).toBe(40);
   });

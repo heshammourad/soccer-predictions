@@ -1,5 +1,5 @@
 import { prisma } from '../db';
-import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match } from './types';
+import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome } from './types';
 import { simulateResult, getLowerScore, calculateRatingChange } from './math';
 
 export class SimulatorEngine {
@@ -24,16 +24,19 @@ export class SimulatorEngine {
     // 1. Fetch all teams
     const teams = await prisma.team.findMany();
 
-    // 2. Fetch matches for this tournament
+    // 2. Fetch matches for this tournament (or every source tournament of a
+    // multi-league config, which simulates its leagues in one pass)
+    const sources = this.config.sourceTournaments ?? [this.config.code];
+    const tournamentFilter = sources.length === 1 ? sources[0] : { in: sources };
     const matches = await prisma.match.findMany({
-      where: { tournament: this.config.code },
+      where: { tournament: tournamentFilter },
       orderBy: { date: 'asc' },
     });
 
     // 3. Fetch this tournament's team-group assignments (per-tournament, so
     // different tournaments never overwrite each other's group data)
     const teamTournamentGroups = await prisma.teamTournamentGroup.findMany({
-      where: { tournament: this.config.code },
+      where: { tournament: tournamentFilter },
     });
 
     const results = matches.filter((m) => {
@@ -195,7 +198,8 @@ export class SimulatorEngine {
 
       // A. Simulate group fixtures
       groupMatches.forEach((fixture) => {
-        const homeAdvantage = (fixture.location === fixture.homeTeamId) ? 100 : 0;
+        const homeHosts = this.config.hostsHomeMatch?.(fixture.homeTeamId, fixture.awayTeamId) ?? true;
+        const homeAdvantage = (homeHosts && fixture.location === fixture.homeTeamId) ? 100 : 0;
         const awayAdvantage = (fixture.location === fixture.awayTeamId) ? 100 : 0;
         const homeElo = simElo[fixture.homeTeamId] + homeAdvantage;
         const awayElo = simElo[fixture.awayTeamId] + awayAdvantage;
@@ -236,7 +240,7 @@ export class SimulatorEngine {
 
         const favTeam = isHomeFav ? fixture.homeTeamId : fixture.awayTeamId;
         const undTeam = isHomeFav ? fixture.awayTeamId : fixture.homeTeamId;
-        const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, this.config.code);
+        const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, fixture.tournament);
         simElo[favTeam] += ratingChange;
         simElo[undTeam] -= ratingChange;
       });
@@ -262,6 +266,30 @@ export class SimulatorEngine {
           }
         });
       });
+
+      // Cross-league playoffs (e.g. promotion/relegation), resolved with the
+      // same two-legged machinery as knockout ties.
+      if (this.config.buildPlayoffTies && this.config.evaluatePlayoffMilestones) {
+        const playoffOutcomes: PlayoffOutcome[] = [];
+        this.groupIntoTies(this.config.buildPlayoffTies(rankedStandings, knockoutMatches)).forEach((tie) => {
+          const winnerId = this.resolveTwoLeggedTie(tie, knockoutMatches, simElo);
+          const teamA = tie[0].homeTeamId;
+          const teamB = tie[0].awayTeamId;
+          playoffOutcomes.push({
+            stageName: tie[0].stageName,
+            winnerId,
+            loserId: winnerId === teamA ? teamB : teamA,
+            leg1HomeTeamId: teamA,
+          });
+        });
+        Object.entries(this.config.evaluatePlayoffMilestones(playoffOutcomes)).forEach(([teamId, names]) => {
+          names.forEach((milestone) => {
+            if (accumulator[teamId] && accumulator[teamId][milestone] !== undefined) {
+              accumulator[teamId][milestone]++;
+            }
+          });
+        });
+      }
 
       // C. Knockout stages
       let ties = this.groupIntoTies(this.config.buildKnockoutBracket(rankedStandings, knockoutMatches));
@@ -338,42 +366,55 @@ export class SimulatorEngine {
       }
     }
 
-    // 4. Save results
-    console.log(`Writing simulation results to database for ${this.config.code} (${this.description})...`);
+    // 4. Save results. A single-tournament config writes one run under its
+    // own code; a multi-league config writes one run per league, each team's
+    // predictions limited to its own league's milestones.
+    const leagues = this.config.leagues ?? [
+      { code: this.config.code, groups: this.config.groups, milestones: this.config.milestones },
+    ];
+    const leagueOfTeam = (teamId: string) => {
+      const group = teamGroupMap[teamId];
+      return leagues.find((l) => l.groups.includes(group));
+    };
 
-    const existingRun = await prisma.simulationRun.findFirst({
-      where: {
-        tournament: this.config.code,
-        description: this.description,
-      },
-    });
+    for (const league of leagues) {
+      console.log(`Writing simulation results to database for ${league.code} (${this.description})...`);
 
-    if (existingRun) {
-      await prisma.simulationRun.delete({
-        where: { id: existingRun.id },
+      const existingRun = await prisma.simulationRun.findFirst({
+        where: {
+          tournament: league.code,
+          description: this.description,
+        },
       });
-    }
 
-    const run = await prisma.simulationRun.create({
-      data: {
-        tournament: this.config.code,
-        description: this.description,
-      },
-    });
-
-    for (const [teamId, totals] of Object.entries(accumulator)) {
-      const eloAtSimulation = Math.round(initialEloMap[teamId] ?? 0);
-      for (const milestone of this.config.milestones) {
-        await prisma.prediction.create({
-          data: {
-            simulationRunId: run.id,
-            teamId,
-            tournament: this.config.code,
-            milestone,
-            probability: totals[milestone] / this.simulationsCount,
-            eloAtSimulation,
-          },
+      if (existingRun) {
+        await prisma.simulationRun.delete({
+          where: { id: existingRun.id },
         });
+      }
+
+      const run = await prisma.simulationRun.create({
+        data: {
+          tournament: league.code,
+          description: this.description,
+        },
+      });
+
+      for (const [teamId, totals] of Object.entries(accumulator)) {
+        if (this.config.leagues && leagueOfTeam(teamId)?.code !== league.code) continue;
+        const eloAtSimulation = Math.round(initialEloMap[teamId] ?? 0);
+        for (const milestone of league.milestones) {
+          await prisma.prediction.create({
+            data: {
+              simulationRunId: run.id,
+              teamId,
+              tournament: league.code,
+              milestone,
+              probability: totals[milestone] / this.simulationsCount,
+              eloAtSimulation,
+            },
+          });
+        }
       }
     }
 
@@ -518,7 +559,8 @@ export class SimulatorEngine {
   // Resolves one leg's scoreline: the real result if it's already been
   // played, otherwise a simulated scoreline (with the home team always
   // getting the home-field ELO boost, since a leg is by definition played
-  // at its designated home team's ground).
+  // at its designated home team's ground, unless the config says that team
+  // cannot host).
   private resolveLegGoals(
     homeTeamId: string,
     awayTeamId: string,
@@ -532,7 +574,8 @@ export class SimulatorEngine {
       return { homeGoals: actual.homeGoals, awayGoals: actual.awayGoals };
     }
 
-    const homeElo = simElo[homeTeamId] + 100;
+    const homeHosts = this.config.hostsHomeMatch?.(homeTeamId, awayTeamId) ?? true;
+    const homeElo = simElo[homeTeamId] + (homeHosts ? 100 : 0);
     const awayElo = simElo[awayTeamId];
 
     const isHomeFav = homeElo >= awayElo;

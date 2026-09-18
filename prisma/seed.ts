@@ -41,6 +41,8 @@ function readDataFile(filePath: string): string {
 const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   WC: new Date('2026-06-28'),
   ENA: new Date('2027-03-25'), // first League A quarterfinal leg
+  ENB: new Date('2027-03-25'), // promotion/relegation playoffs (window assumed, as in scripts/sync.ts)
+  ENC: new Date('2027-03-25'),
 };
 
 function isKnockoutMatch(tourney: string, date: Date): boolean {
@@ -134,7 +136,7 @@ async function main() {
 
   // 4. Ingest Matches (results and fixtures), and per-tournament group
   // assignments, for all available tournaments
-  const tournaments = ['WC', 'ENA'];
+  const tournaments = ['WC', 'ENA', 'ENB', 'ENC'];
   for (const tourney of tournaments) {
     const tourneyDir = path.join(DATA_DIR, tourney);
     if (!fs.existsSync(tourneyDir)) continue;

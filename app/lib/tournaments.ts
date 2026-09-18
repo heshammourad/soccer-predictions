@@ -24,10 +24,50 @@ export interface TournamentDescriptor {
   // Mirrors the milestone list scripts/sync.ts uses for this tournament, so
   // the dashboard can compute the right historical cutoff date per run.
   milestoneDates: { [description: string]: string | undefined };
+  // Milestones in the order the table sorts by default (all descending), and
+  // the first of them is the headline outcome. Defaults to the reverse of
+  // `milestones`, which suits a ladder ending in a champion; set it when the
+  // milestone list also has outcomes (e.g. relegation) that shouldn't drive
+  // the default ordering.
+  defaultSortMilestones?: string[];
+  // Keep the group-phase milestone column after the group stage ends. It's
+  // otherwise hidden then, since for a knockout tournament "won the group"
+  // stops being interesting; not so when it's a final outcome (promotion).
+  keepGroupPhaseMilestoneAfterGroupStage?: boolean;
+  // Grey out and strike through teams the math status says are eliminated
+  // (default true). Turn off when elimination from the headline ladder isn't
+  // the interesting outcome (e.g. a team out of the title race can still be
+  // fighting relegation).
+  dimEliminatedTeams?: boolean;
   // Deterministic (non-simulation) group-phase status calculator for this
   // tournament's group shape.
   calculateMathStatus: (teams: SimpleTeam[], results: SimpleMatch[], fixtures: SimpleMatch[]) => MathStatus;
 }
+
+// Leagues with no knockout ladder only have a "finish 1st" outcome that can be
+// proved from the group table (direct promotion). Reaching a playoff or
+// avoiding relegation also depends on cross-group rankings, so nothing else is
+// reported as guaranteed or eliminated.
+const calculateWinGroupOnlyStatus: TournamentDescriptor['calculateMathStatus'] = (teams, results, fixtures) => ({
+  ...calculateGroupTop2Status(teams, results, fixtures),
+  guaranteedProgress: new Set<string>(),
+  mathematicallyEliminated: new Set<string>(),
+});
+
+// Leagues A-C are simulated together (the promotion/relegation playoffs link
+// them), with one run per league; they share this milestone schedule.
+const NATIONS_LEAGUE_MILESTONE_DATES: TournamentDescriptor['milestoneDates'] = {
+  'Start (Pre-tournament)': '2026-09-23T23:59:59Z',
+  'Matchday 1 Completed': '2026-09-26T23:59:59Z',
+  'Matchday 2 Completed': '2026-09-29T23:59:59Z',
+  'Matchday 3 Completed': '2026-10-03T23:59:59Z',
+  'Matchday 4 Completed': '2026-10-06T23:59:59Z',
+  'Matchday 5 Completed': '2026-11-14T23:59:59Z',
+  'Matchday 6 Completed': '2026-11-17T23:59:59Z',
+  'Playoffs & Quarterfinals Completed': '2027-03-30T23:59:59Z',
+  'Semifinals Completed': '2027-06-10T23:59:59Z',
+  'Current Projections': undefined,
+};
 
 export const TOURNAMENTS: TournamentDescriptor[] = [
   {
@@ -60,8 +100,8 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   },
   {
     code: 'ENA',
-    name: '2026-27 UEFA Nations League',
-    milestones: ['winGroup', 'quarterfinals', 'semifinals', 'final', 'champions'],
+    name: '2026-27 UEFA Nations League A',
+    milestones: ['winGroup', 'quarterfinals', 'semifinals', 'final', 'champions', 'autoRelegated', 'relegated'],
     knockoutStages: ['quarterfinals', 'semifinals', 'final', 'champions'],
     milestoneLabels: {
       winGroup: 'Win Group',
@@ -69,24 +109,50 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       semifinals: 'Semifinals',
       final: 'Finalist',
       champions: 'Champion',
+      autoRelegated: 'Auto Relegation',
+      relegated: 'Relegation',
     },
     groupPhaseMilestone: 'winGroup',
+    defaultSortMilestones: ['champions', 'final', 'semifinals', 'quarterfinals', 'winGroup'],
+    dimEliminatedTeams: false,
     // Official UEFA schedule: league phase 24 Sep - 17 Nov 2026 (6
     // matchdays), League A quarterfinals (two legs) 25-30 March 2027,
     // Finals (semifinals + third-place playoff/final) 9-13 June 2027.
-    milestoneDates: {
-      'Start (Pre-tournament)': '2026-09-23T23:59:59Z',
-      'Matchday 1 Completed': '2026-09-26T23:59:59Z',
-      'Matchday 2 Completed': '2026-09-29T23:59:59Z',
-      'Matchday 3 Completed': '2026-10-03T23:59:59Z',
-      'Matchday 4 Completed': '2026-10-06T23:59:59Z',
-      'Matchday 5 Completed': '2026-11-14T23:59:59Z',
-      'Matchday 6 Completed': '2026-11-17T23:59:59Z',
-      'Quarterfinals Completed': '2027-03-30T23:59:59Z',
-      'Semifinals Completed': '2027-06-10T23:59:59Z',
-      'Current Projections': undefined,
-    },
+    milestoneDates: NATIONS_LEAGUE_MILESTONE_DATES,
     calculateMathStatus: calculateGroupTop2Status,
+  },
+  {
+    code: 'ENB',
+    name: '2026-27 UEFA Nations League B',
+    milestones: ['autoPromoted', 'promoted', 'relegated'],
+    knockoutStages: [],
+    milestoneLabels: {
+      autoPromoted: 'Auto Promotion',
+      promoted: 'Promotion',
+      relegated: 'Relegation',
+    },
+    groupPhaseMilestone: 'autoPromoted',
+    defaultSortMilestones: ['promoted', 'autoPromoted'],
+    keepGroupPhaseMilestoneAfterGroupStage: true,
+    dimEliminatedTeams: false,
+    milestoneDates: NATIONS_LEAGUE_MILESTONE_DATES,
+    calculateMathStatus: calculateWinGroupOnlyStatus,
+  },
+  {
+    code: 'ENC',
+    name: '2026-27 UEFA Nations League C',
+    milestones: ['autoPromoted', 'promoted'],
+    knockoutStages: [],
+    milestoneLabels: {
+      autoPromoted: 'Auto Promotion',
+      promoted: 'Promotion',
+    },
+    groupPhaseMilestone: 'autoPromoted',
+    defaultSortMilestones: ['promoted', 'autoPromoted'],
+    keepGroupPhaseMilestoneAfterGroupStage: true,
+    dimEliminatedTeams: false,
+    milestoneDates: NATIONS_LEAGUE_MILESTONE_DATES,
+    calculateMathStatus: calculateWinGroupOnlyStatus,
   },
 ];
 
