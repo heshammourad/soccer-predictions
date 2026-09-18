@@ -229,7 +229,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
     milestoneLabels: {
       winGroup: 'Win Group',
       quarterfinals: 'Quarterfinals',
-      semifinals: 'Semifinals (Gold Cup)',
+      semifinals: 'Semifinals',
       final: 'Finalist',
       champions: 'Champion',
       relegated: 'Relegation',
@@ -251,7 +251,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
     milestones: ['promoted', 'relegated'],
     knockoutStages: [],
     milestoneLabels: {
-      promoted: 'Promotion (Gold Cup)',
+      promoted: 'Promotion',
       relegated: 'Relegation',
     },
     groupPhaseMilestone: 'promoted',
