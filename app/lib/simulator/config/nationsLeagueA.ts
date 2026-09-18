@@ -28,22 +28,23 @@ export class NationsLeagueAConfig implements TournamentConfig {
   }
 
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    const getMatchResult = (teamA: string, teamB: string) => {
-      const match = matches.find(
-        (m) =>
-          ((m.homeTeamId === teamA && m.awayTeamId === teamB) ||
-            (m.homeTeamId === teamB && m.awayTeamId === teamA))
-      );
-      if (match && match.homeGoals !== null && match.awayGoals !== null) {
-        return {
-          team1: match.homeTeamId,
-          team2: match.awayTeamId,
-          score1: match.homeGoals,
-          score2: match.awayGoals,
-        };
-      }
-      return null;
-    };
+    // League-phase groups are double round-robins: every pair meets home and
+    // away, and both matches count towards head-to-head tiebreakers.
+    const getMatchResult = (teamA: string, teamB: string) =>
+      matches
+        .filter(
+          (m) =>
+            ((m.homeTeamId === teamA && m.awayTeamId === teamB) ||
+              (m.homeTeamId === teamB && m.awayTeamId === teamA)) &&
+            m.homeGoals !== null &&
+            m.awayGoals !== null
+        )
+        .map((m) => ({
+          team1: m.homeTeamId,
+          team2: m.awayTeamId,
+          score1: m.homeGoals as number,
+          score2: m.awayGoals as number,
+        }));
     return sortGroupTeamsWithH2H(teams, getMatchResult);
   }
 

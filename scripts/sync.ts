@@ -5,7 +5,7 @@ import pg from 'pg';
 import { Session, ClientIdentifier, initTLS, destroyTLS } from 'node-tls-client';
 import { SimulatorEngine } from '../app/lib/simulator/engine';
 import { WorldCup48Config } from '../app/lib/simulator/config/worldCup';
-import { NationsLeagueAConfig } from '../app/lib/simulator/config/nationsLeagueA';
+import { NationsLeagueConfig } from '../app/lib/simulator/config/nationsLeague';
 import { TournamentConfig } from '../app/lib/simulator/types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,15 +24,27 @@ const prisma = new PrismaClient({ adapter });
 // `<prefix>_latest.tsv` -> `<prefix>_results.tsv` -> `<prefix>.tsv`).
 const RESULTS_SOURCES: { code: string; urlPrefix: string }[] = [
   { code: 'WC', urlPrefix: 'https://eloratings.net/2026_World_Cup' },
-  { code: 'ENA', urlPrefix: 'https://eloratings.net/2026-27_European_Nations_League_A' },
 ];
-const activeTournaments = RESULTS_SOURCES.map((s) => s.code);
+
+// The Nations League divisions aren't published under a per-tournament results
+// file (a `<name>_latest.tsv` lookup for them returns unrelated data). Their
+// played matches show up in the global recent-results feed and their upcoming
+// matches (including drawn playoff pairings, once announced) in the global
+// fixtures feed, both tagged with the tournament code.
+const NATIONS_LEAGUE_CODES = ['ENA', 'ENB', 'ENC'];
+const GLOBAL_RESULTS_URL = 'https://eloratings.net/latest.tsv';
+const GLOBAL_FIXTURES_URL = 'https://eloratings.net/fixtures.tsv';
 
 // Knockout stage start date per tournament, used to classify a synced match
 // as a group/league-phase match vs. a knockout match.
 const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
   WC: new Date('2026-06-28'),
   ENA: new Date('2027-03-25'), // first League A quarterfinal leg
+  // Promotion/relegation playoffs: assumed to share the March 2027 window with
+  // the League A quarterfinals (as in the previous edition); the playoff
+  // fixtures aren't published yet, so confirm the dates once they are.
+  ENB: new Date('2027-03-25'),
+  ENC: new Date('2027-03-25'),
 };
 
 function isKnockoutMatch(tourney: string, date: Date): boolean {
@@ -52,6 +64,152 @@ async function fetchWithFallback(session: Session, urlPrefix: string): Promise<s
     lastStatus = res.status;
   }
   throw new Error(`Failed to fetch results from ${urlPrefix}*: HTTP ${lastStatus}`);
+}
+
+// Parses a results TSV (year, month, day, home, away, homeGoals, awayGoals,
+// tournament, location, ratingChange, ...) and upserts the rows for `codes`.
+// matchByPair: find the existing row by (tournament, home, away) rather than
+// by exact date -- right for double round-robin league phases and two-legged
+// ties, where an ordered home/away pair is unique within a tournament, and
+// robust to a fixture having been rescheduled since it was synced.
+async function syncResults(resultsData: string, codes: string[], matchByPair: boolean): Promise<number> {
+  let resultsCount = 0;
+  for (const line of resultsData.split('\n')) {
+    if (!line.trim()) continue;
+    const fields = line.split('\t');
+    if (fields.length >= 8) {
+      const matchTournament = fields[7].trim();
+      if (!codes.includes(matchTournament)) continue;
+
+      const year = fields[0].trim();
+      const month = fields[1].trim();
+      const day = fields[2].trim();
+      const team1 = fields[3].trim();
+      const team2 = fields[4].trim();
+      const score1 = parseInt(fields[5].trim(), 10);
+      const score2 = parseInt(fields[6].trim(), 10);
+
+      if (!team1 || !team2 || isNaN(score1) || isNaN(score2)) continue;
+
+      const m = month === '00' ? '06' : month;
+      const d = day === '00' ? '15' : day;
+      const date = new Date(`${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
+
+      const location = fields[8] && fields[8].trim() ? fields[8].trim() : team1;
+      const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
+
+      // Check if match already exists
+      const existing = await prisma.match.findFirst({
+        where: matchByPair
+          ? { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament }
+          : { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament, date }
+      });
+
+      if (existing) {
+        await prisma.match.update({
+          where: { id: existing.id },
+          data: { homeGoals: score1, awayGoals: score2, location, ratingChange, ...(matchByPair ? { date } : {}) }
+        });
+      } else {
+        await prisma.match.create({
+          data: {
+            tournament: matchTournament,
+            date,
+            homeTeamId: team1,
+            awayTeamId: team2,
+            homeGoals: score1,
+            awayGoals: score2,
+            isKnockout: isKnockoutMatch(matchTournament, date),
+            location,
+            ratingChange
+          }
+        });
+      }
+      resultsCount++;
+    }
+  }
+  return resultsCount;
+}
+
+// Parses the global fixtures TSV (year, month, day, home, away, tournament,
+// location, ...) and creates or refreshes the still-unplayed matches for
+// `codes`, so late-published fixtures (e.g. a drawn playoff pairing) and
+// venue/date changes reach the simulator without reseeding.
+async function syncFixtures(fixturesData: string, codes: string[]): Promise<number> {
+  const knownTeams = new Set((await prisma.team.findMany({ select: { id: true } })).map((t) => t.id));
+  let count = 0;
+  for (const line of fixturesData.split('\n')) {
+    if (!line.trim()) continue;
+    const fields = line.split('\t');
+    if (fields.length < 6) continue;
+    const tournament = fields[5].trim();
+    if (!codes.includes(tournament)) continue;
+
+    const team1 = fields[3].trim();
+    const team2 = fields[4].trim();
+    if (!team1 || !team2) continue;
+    if (!knownTeams.has(team1) || !knownTeams.has(team2)) {
+      console.warn(`Skipping ${tournament} fixture ${team1}-${team2}: team not in database.`);
+      continue;
+    }
+
+    const month = fields[1].trim() === '00' ? '06' : fields[1].trim();
+    const day = fields[2].trim() === '00' ? '15' : fields[2].trim();
+    const date = new Date(`${fields[0].trim()}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00Z`);
+    const location = fields[6] && fields[6].trim() ? fields[6].trim() : null;
+
+    const existing = await prisma.match.findFirst({
+      where: { homeTeamId: team1, awayTeamId: team2, tournament }
+    });
+    if (existing) {
+      // A played match is owned by the results sync.
+      if (existing.homeGoals === null) {
+        await prisma.match.update({
+          where: { id: existing.id },
+          data: { date, location, isKnockout: isKnockoutMatch(tournament, date) }
+        });
+      }
+    } else {
+      await prisma.match.create({
+        data: {
+          tournament,
+          date,
+          homeTeamId: team1,
+          awayTeamId: team2,
+          homeGoals: null,
+          awayGoals: null,
+          isKnockout: isKnockoutMatch(tournament, date),
+          location,
+          ratingChange: 0
+        }
+      });
+    }
+    count++;
+  }
+  return count;
+}
+
+// Group assignments come from prisma/seed-data/<code>/groups, and are only
+// ever added or corrected here (never truncated, unlike a full reseed), so
+// a new tournament reaches a live database on the next sync.
+async function ensureGroupAssignments(codes: string[]) {
+  for (const code of codes) {
+    const groupsPath = path.resolve(__dirname, `../prisma/seed-data/${code}/groups`);
+    if (!fs.existsSync(groupsPath)) continue;
+    const groups: { [group: string]: string[] } = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+    let count = 0;
+    for (const [group, teamIds] of Object.entries(groups)) {
+      for (const teamId of teamIds) {
+        await prisma.teamTournamentGroup.upsert({
+          where: { teamId_tournament: { teamId, tournament: code } },
+          update: { group },
+          create: { teamId, tournament: code, group }
+        });
+        count++;
+      }
+    }
+    console.log(`Ensured ${count} ${code} group assignments.`);
+  }
 }
 
 async function run() {
@@ -133,66 +291,28 @@ async function run() {
       }
 
       console.log(`Updating ${source.code} match results in database...`);
-      let resultsCount = 0;
-      for (const line of resultsData.split('\n')) {
-        if (!line.trim()) continue;
-        const fields = line.split('\t');
-        if (fields.length >= 8) {
-          const matchTournament = fields[7].trim();
-          if (!activeTournaments.includes(matchTournament)) continue;
-
-          const year = fields[0].trim();
-          const month = fields[1].trim();
-          const day = fields[2].trim();
-          const team1 = fields[3].trim();
-          const team2 = fields[4].trim();
-          const score1 = parseInt(fields[5].trim(), 10);
-          const score2 = parseInt(fields[6].trim(), 10);
-
-          if (!team1 || !team2 || isNaN(score1) || isNaN(score2)) continue;
-
-          const m = month === '00' ? '06' : month;
-          const d = day === '00' ? '15' : day;
-          const date = new Date(`${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
-
-          const location = fields[8] && fields[8].trim() ? fields[8].trim() : team1;
-          const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
-
-          // Check if match already exists
-          const existing = await prisma.match.findFirst({
-            where: {
-              homeTeamId: team1,
-              awayTeamId: team2,
-              tournament: matchTournament,
-              date
-            }
-          });
-
-          if (existing) {
-            await prisma.match.update({
-              where: { id: existing.id },
-              data: { homeGoals: score1, awayGoals: score2, location, ratingChange }
-            });
-          } else {
-            await prisma.match.create({
-              data: {
-                tournament: matchTournament,
-                date,
-                homeTeamId: team1,
-                awayTeamId: team2,
-                homeGoals: score1,
-                awayGoals: score2,
-                isKnockout: isKnockoutMatch(matchTournament, date),
-                location,
-                ratingChange
-              }
-            });
-          }
-          resultsCount++;
-        }
-      }
+      const resultsCount = await syncResults(resultsData, [source.code], false);
       console.log(`Synced ${resultsCount} ${source.code} match results.`);
     }
+
+    console.log('Fetching Nations League results and fixtures from eloratings.net...');
+    const nlResultsRes = await session.get(GLOBAL_RESULTS_URL);
+    if (nlResultsRes.status === 200) {
+      const count = await syncResults(await nlResultsRes.text(), NATIONS_LEAGUE_CODES, true);
+      console.log(`Synced ${count} Nations League match results.`);
+    } else {
+      console.error(`Skipping Nations League results sync: HTTP ${nlResultsRes.status}`);
+    }
+
+    const nlFixturesRes = await session.get(GLOBAL_FIXTURES_URL);
+    if (nlFixturesRes.status === 200) {
+      const count = await syncFixtures(await nlFixturesRes.text(), NATIONS_LEAGUE_CODES);
+      console.log(`Synced ${count} Nations League fixtures.`);
+    } else {
+      console.error(`Skipping Nations League fixtures sync: HTTP ${nlFixturesRes.status}`);
+    }
+
+    await ensureGroupAssignments(NATIONS_LEAGUE_CODES);
 
   } finally {
     console.log('Closing TLS session...');
@@ -210,6 +330,8 @@ async function runMilestonesForConfig(
 ) {
   console.log(`Running ${config.name} simulations via TypeScript engine...`);
   const now = new Date();
+  // A multi-league config writes one run per league for each milestone.
+  const runCodes = (config.leagues ?? [{ code: config.code }]).map((l) => l.code);
 
   const historicalMilestones = milestones.filter((m): m is { name: string; date: Date } => m.date !== undefined);
   const allHistoricalDatesPassed = historicalMilestones.every((m) => m.date <= now);
@@ -217,12 +339,12 @@ async function runMilestonesForConfig(
   if (allHistoricalDatesPassed) {
     const existingRunsCount = await prisma.simulationRun.count({
       where: {
-        tournament: config.code,
+        tournament: { in: runCodes },
         description: { in: historicalMilestones.map((m) => m.name) }
       }
     });
 
-    if (existingRunsCount === historicalMilestones.length) {
+    if (existingRunsCount === historicalMilestones.length * runCodes.length) {
       console.log(`Tournament ${config.code} is complete and all historical milestones exist in DB. Skipping simulations.`);
       return;
     }
@@ -235,13 +357,13 @@ async function runMilestonesForConfig(
     }
 
     if (milestone.date) {
-      const existing = await prisma.simulationRun.findFirst({
+      const existingCount = await prisma.simulationRun.count({
         where: {
-          tournament: config.code,
+          tournament: { in: runCodes },
           description: milestone.name
         }
       });
-      if (existing) {
+      if (existingCount === runCodes.length) {
         console.log(`Skipping historical milestone: ${milestone.name} (already exists in database)`);
         continue;
       }
@@ -272,10 +394,12 @@ run()
     ]);
 
     // Official UEFA schedule: league phase 24 Sep - 17 Nov 2026 (6
-    // matchdays), League A quarterfinals (two legs) 25-30 March 2027,
-    // Finals (semifinals + third-place playoff/final) 9-13 June 2027.
-    // Keep in sync with app/lib/tournaments.ts's ENA milestoneDates.
-    await runMilestonesForConfig(new NationsLeagueAConfig(), [
+    // matchdays), promotion/relegation playoffs and League A quarterfinals
+    // (two legs) in March 2027, League A Finals (semifinals + third-place
+    // playoff/final) 9-13 June 2027. Leagues A-C are simulated together (one
+    // run per league is written), so the milestone list is shared. Keep in
+    // sync with app/lib/tournaments.ts's ENA/ENB/ENC milestoneDates.
+    await runMilestonesForConfig(new NationsLeagueConfig(), [
       { name: 'Start (Pre-tournament)', date: new Date('2026-09-23T23:59:59Z') },
       { name: 'Matchday 1 Completed', date: new Date('2026-09-26T23:59:59Z') },
       { name: 'Matchday 2 Completed', date: new Date('2026-09-29T23:59:59Z') },
@@ -283,7 +407,7 @@ run()
       { name: 'Matchday 4 Completed', date: new Date('2026-10-06T23:59:59Z') },
       { name: 'Matchday 5 Completed', date: new Date('2026-11-14T23:59:59Z') },
       { name: 'Matchday 6 Completed', date: new Date('2026-11-17T23:59:59Z') },
-      { name: 'Quarterfinals Completed', date: new Date('2027-03-30T23:59:59Z') },
+      { name: 'Playoffs & Quarterfinals Completed', date: new Date('2027-03-30T23:59:59Z') },
       { name: 'Semifinals Completed', date: new Date('2027-06-10T23:59:59Z') },
       { name: 'Tournament Completed', date: new Date('2027-06-13T23:59:59Z') },
       { name: 'Current Projections', date: undefined }

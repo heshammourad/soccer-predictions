@@ -13,6 +13,20 @@ This directory houses the TypeScript tournament simulation framework. It utilize
   * `base.ts`: Standard tiebreakers and Head-to-Head (H2H) group sorting.
   * `worldCup.ts`: 2026 World Cup adapter (12 groups, best 8 third-place qualifiers, 32-team knockout bracket).
   * `worldCupMatchupScenarios.ts`: Matrix index lookup for matching World Cup third-place teams.
+  * `nationsLeagueA.ts`: 2026-27 UEFA Nations League A adapter (4 double round-robin groups, two-legged quarterfinals, Finals with a dynamically chosen host).
+  * `nationsLeague.ts`: Leagues A-C simulated together, with the cross-league promotion/relegation playoffs (see below).
+
+---
+
+## Simulating Several Leagues Together
+
+When outcomes in one tournament depend on another's (Nations League promotion/relegation playoffs pair a League B runner-up with a League A third-place team from the *same* iteration), a single config can drive several source tournaments. The optional `TournamentConfig` hooks for this (all ignored by single-tournament configs like `WorldCup48Config`):
+
+* `sourceTournaments` / `leagues`: load `Match` and `TeamTournamentGroup` rows for several tournament codes, and write one `SimulationRun` + `Prediction` set per league, each limited to that league's `milestones`. `groups` and `milestones` on the config are the union across leagues.
+* `buildPlayoffTies` / `evaluatePlayoffMilestones`: cross-league two-legged ties after the group phase, resolved by the same machinery as knockout ties. Prefer real drawn fixtures (passed in as `knownFixtures`) over an invented draw.
+* `hostsHomeMatch`: whether a home team actually gets the home-advantage boost (e.g. associations that cannot currently host). Applies to group fixtures and two-legged ties.
+
+`NationsLeagueConfig` (`config/nationsLeague.ts`) is the worked example. Its `code` is `'EN'`, which is not a database tournament code; results land under `ENA`/`ENB`/`ENC`.
 
 ---
 

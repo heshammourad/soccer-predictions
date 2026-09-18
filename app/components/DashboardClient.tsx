@@ -121,7 +121,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   };
 
   const handleSimulate = () => {
-    setSimMessage('Simulating 10,000 tournaments on the server... this takes 5-10 seconds.');
+    setSimMessage('Simulating 10,000 tournaments on the server... this can take 10-20 seconds.');
     startTransition(async () => {
       const res = await triggerSimulation(activeTournament);
       if (res.success) {
@@ -245,7 +245,8 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
 
   const isEliminatedMap: { [teamId: string]: boolean } = {};
   teamRows.forEach((r) => {
-    isEliminatedMap[r.teamId] = mathStatus.mathematicallyEliminated.has(r.teamId);
+    isEliminatedMap[r.teamId] =
+      tournament.dimEliminatedTeams !== false && mathStatus.mathematicallyEliminated.has(r.teamId);
   });
 
   const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) => {
@@ -294,7 +295,8 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     return `${Math.round(eff * 100)}%`;
   };
 
-  const championsMilestone = tournament.milestones[tournament.milestones.length - 1];
+  const sortMilestones = tournament.defaultSortMilestones ?? [...tournament.milestones].reverse();
+  const championsMilestone = sortMilestones[0];
 
   // Sort predictions based on whether it is group stage or knockout stage
   const sortedRows = React.useMemo(() => {
@@ -327,8 +329,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
       }
       // Sort by success metrics descending using effective probabilities,
       // from the last (biggest) milestone down to the first.
-      for (let i = tournament.milestones.length - 1; i >= 0; i--) {
-        const milestone = tournament.milestones[i];
+      for (const milestone of sortMilestones) {
         const diff =
           getEffectiveProbability(b.values[milestone] ?? 0, b.teamId, milestone) -
           getEffectiveProbability(a.values[milestone] ?? 0, a.teamId, milestone);
@@ -357,7 +358,9 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   // Columns to render: team/group/elo, then this tournament's milestones
   // (group-phase milestone hidden once we're past the group stage).
   const visibleMilestones = tournament.milestones.filter((m) => {
-    if (tournament.groupPhaseMilestone && m === tournament.groupPhaseMilestone) return isGroupStage;
+    if (tournament.groupPhaseMilestone && m === tournament.groupPhaseMilestone) {
+      return isGroupStage || tournament.keepGroupPhaseMilestoneAfterGroupStage === true;
+    }
     return true;
   });
   const columns: SortColumn[] = ['team', ...(isGroupStage ? ['group'] : []), 'elo', ...visibleMilestones];

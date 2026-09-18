@@ -179,6 +179,11 @@ const weights: { [tournament: string]: number } = {
   // 30 used here (MAE ~3.7 rating points either way) -- inconclusive with
   // that little data, but worth rechecking with a full season.
   ENA: 30,
+  // League B/C and the combined Nations League config (see
+  // config/nationsLeague.ts) use the same tier as League A.
+  ENB: 30,
+  ENC: 30,
+  EN: 30,
   EQ: 40,
   F: 20,
   FBQ: 40,

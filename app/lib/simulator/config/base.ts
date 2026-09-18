@@ -30,7 +30,9 @@ export function sortGroupTeamsStandard(teams: TeamStats[]): TeamStats[] {
 
 export function sortGroupTeamsWithH2H(
   teams: TeamStats[],
-  getMatchResult: (teamA: string, teamB: string) => H2HMatch | null
+  // May return several matches for a pair (a double round-robin group), all
+  // of which count towards the head-to-head mini-table.
+  getMatchResult: (teamA: string, teamB: string) => H2HMatch | H2HMatch[] | null
 ): TeamStats[] {
   const overallStatsMap: { [teamId: string]: TeamStats } = {};
   teams.forEach((t) => {
@@ -47,8 +49,9 @@ export function sortGroupTeamsWithH2H(
       for (let j = i + 1; j < subset.length; j++) {
         const teamA = subset[i];
         const teamB = subset[j];
-        const match = getMatchResult(teamA, teamB);
-        if (match) {
+        const found = getMatchResult(teamA, teamB);
+        const pairMatches = found === null ? [] : Array.isArray(found) ? found : [found];
+        for (const match of pairMatches) {
           let scoreA = 0;
           let scoreB = 0;
           if (match.team1 === teamA) {
