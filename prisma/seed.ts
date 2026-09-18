@@ -172,8 +172,8 @@ async function main() {
           const date = new Date(dateStr);
 
           // Verify that both teams exist in Team table
-          let t1Exists = allCodes.includes(team1);
-          let t2Exists = allCodes.includes(team2);
+          const t1Exists = allCodes.includes(team1);
+          const t2Exists = allCodes.includes(team2);
           if (!t1Exists) {
             await prisma.team.create({
               data: { id: team1, name: team1, currentElo: 1000 }
@@ -237,8 +237,8 @@ async function main() {
           const date = new Date(dateStr);
 
           // Verify that both teams exist in Team table
-          let t1Exists = allCodes.includes(team1);
-          let t2Exists = allCodes.includes(team2);
+          const t1Exists = allCodes.includes(team1);
+          const t2Exists = allCodes.includes(team2);
           if (!t1Exists) {
             await prisma.team.create({
               data: { id: team1, name: team1, currentElo: 1000 }

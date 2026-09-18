@@ -1,3 +1,4 @@
+import type { Match as PrismaMatch } from '@/app/generated/prisma/client';
 import { prisma } from '../db';
 import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome } from './types';
 import { simulateResult, getLowerScore, calculateRatingChange } from './math';
@@ -643,7 +644,7 @@ export class SimulatorEngine {
     }
   }
 
-  private mapMatchPrismaToLocal(m: any): Match {
+  private mapMatchPrismaToLocal(m: PrismaMatch): Match {
     return {
       id: m.id,
       tournament: m.tournament,

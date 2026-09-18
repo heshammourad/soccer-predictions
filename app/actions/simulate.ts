@@ -28,8 +28,8 @@ export async function triggerSimulation(tournamentCode: string) {
     // Revalidate the tournament route
     (config.leagues?.map((l) => l.code) ?? [code]).forEach((c) => revalidatePath(`/tournament/${c}`));
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Simulation Server Action error:", error);
-    return { success: false, error: error.message || 'Failed to run simulation' };
+    return { success: false, error: (error instanceof Error && error.message) || 'Failed to run simulation' };
   }
 }
