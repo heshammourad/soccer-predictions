@@ -123,6 +123,15 @@ export class SimulatorEngine {
       }
     });
 
+    this.config.groups.forEach((g) => {
+      if (initialStandings[g].length === 0) {
+        throw new Error(
+          `Simulation aborted: group "${g}" for tournament "${this.config.code}" has no teams. ` +
+          `Check TeamTournamentGroup assignments and Match fixtures for this tournament.`
+        );
+      }
+    });
+
     // Populate actual played matches in initial standings
     results.forEach((match) => {
       if (match.isKnockout) return;
