@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareStats, sortGroupTeamsWithH2H, sortDoubleRoundRobinGroup, H2HMatch } from './base';
+import { compareStats, sortGroupTeamsWithH2H, sortDoubleRoundRobinGroup, CAF_TIEBREAKERS, H2HMatch } from './base';
 import { TeamStats } from '../types';
 
 function makeTeam(overrides: Partial<TeamStats> & { teamId: string }): TeamStats {
@@ -113,7 +113,7 @@ describe('sortDoubleRoundRobinGroup', () => {
   });
 
   describe('with CAF away-goals criteria', () => {
-    const caf = { awayGoals: true };
+    const caf = CAF_TIEBREAKERS;
 
     it('breaks a head-to-head tie on away goals scored', () => {
       // Each won at home (A 3-2, B 1-0): level on H2H points (3-3), GD (0)
