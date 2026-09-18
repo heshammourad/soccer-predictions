@@ -28,6 +28,9 @@ function compareStatsObj(
   return 0;
 }
 
+// Ties that only CAF's away-goals criteria would break are left unresolved
+// (reported as a range of positions), which is the conservative reading for
+// "guaranteed"/"eliminated" — see config/base.ts for the simulation's sort.
 function sortGroup(
   groupTeams: string[],
   groupMatches: SimpleMatch[]
@@ -69,11 +72,13 @@ function sortGroup(
       for (let j = i + 1; j < subset.length; j++) {
         const u = subset[i];
         const v = subset[j];
-        const m = groupMatches.find(m => 
-          (m.homeTeamId === u && m.awayTeamId === v) || 
+        // Every meeting of the pair counts (two in a double round-robin).
+        const meetings = groupMatches.filter(m =>
+          (m.homeTeamId === u && m.awayTeamId === v) ||
           (m.homeTeamId === v && m.awayTeamId === u)
         );
-        if (m && m.homeGoals !== null && m.awayGoals !== null) {
+        meetings.forEach(m => {
+          if (m.homeGoals === null || m.awayGoals === null) return;
           const uIsHome = m.homeTeamId === u;
           const uGoals = uIsHome ? m.homeGoals : m.awayGoals;
           const vGoals = uIsHome ? m.awayGoals : m.homeGoals;
@@ -89,7 +94,7 @@ function sortGroup(
             h2hStats[u].points += 1;
             h2hStats[v].points += 1;
           }
-        }
+        });
       }
     }
 
@@ -434,6 +439,19 @@ export function calculateMathematicalStatus(
   };
 }
 
+export interface GroupTop2Options {
+  // Teams already through regardless of results (e.g. tournament hosts in a
+  // qualifying group). Each takes one of a group's two places: it is always
+  // guaranteed, and the remaining places go to the best-placed other teams,
+  // so the "top 1/2" results below then refer to a team's rank among the
+  // non-automatic teams and to the reduced number of places.
+  automaticQualifiers?: string[];
+  // Skip (report nothing as decided for) any group with more unplayed
+  // matches than this. The enumeration below is 6^k per group, which is too
+  // slow to run in the browser for a double round-robin early on.
+  maxRemainingPerGroup?: number;
+}
+
 // Simpler group-phase status for tournaments where only the top 2 of each
 // group advance and there's no cross-group "best third place" comparison
 // (e.g. the 2026-27 Nations League A's 4-team groups) — unlike
@@ -442,8 +460,10 @@ export function calculateMathematicalStatus(
 export function calculateGroupTop2Status(
   teams: SimpleTeam[],
   results: SimpleMatch[],
-  fixtures: SimpleMatch[]
+  fixtures: SimpleMatch[],
+  options: GroupTop2Options = {}
 ) {
+  const automatic = new Set(options.automaticQualifiers ?? []);
   const teamGroupMap: Record<string, string> = {};
   const groupTeams: Record<string, string[]> = {};
   const allGroups = new Set<string>();
@@ -500,11 +520,18 @@ export function calculateGroupTop2Status(
 
     if (groupUnplayedMatches.length === 0) return;
 
-    if (groupPlayedMatches.length === 0) {
+    // Places open to the group's non-automatic teams.
+    const slots = 2 - groupTeamsList.filter(id => automatic.has(id)).length;
+
+    const tooManyRemaining =
+      options.maxRemainingPerGroup !== undefined && groupUnplayedMatches.length > options.maxRemainingPerGroup;
+    if (groupPlayedMatches.length === 0 || tooManyRemaining) {
       // Nothing decided yet: anyone could finish 1st or 2nd, no one is guaranteed.
       groupTeamsList.forEach(id => {
         canFinishTop1[id] = true;
         canFinishTop2[id] = true;
+        mustFinishTop1[id] = false;
+        mustFinishTop2[id] = false;
       });
       return;
     }
@@ -512,7 +539,9 @@ export function calculateGroupTop2Status(
     const generate = (index: number, currentMatches: SimpleMatch[]) => {
       if (index === groupUnplayedMatches.length) {
         const allMatches = [...groupPlayedMatches, ...currentMatches];
-        const sorted = sortGroup(groupTeamsList, allMatches);
+        const sorted = sortGroup(groupTeamsList, allMatches)
+          .map(sub => sub.filter(id => !automatic.has(id)))
+          .filter(sub => sub.length > 0);
 
         let currentIndex = 1;
         const rankRanges: Record<string, { best: number; worst: number }> = {};
@@ -527,11 +556,12 @@ export function calculateGroupTop2Status(
         });
 
         groupTeamsList.forEach(id => {
+          if (automatic.has(id)) return;
           const { best, worst } = rankRanges[id];
           if (best === 1) canFinishTop1[id] = true;
           if (worst > 1) mustFinishTop1[id] = false;
-          if (best <= 2) canFinishTop2[id] = true;
-          if (worst > 2) mustFinishTop2[id] = false;
+          if (best <= slots) canFinishTop2[id] = true;
+          if (worst > slots) mustFinishTop2[id] = false;
         });
 
         return;
@@ -551,6 +581,11 @@ export function calculateGroupTop2Status(
   teams.forEach(t => {
     const g = teamGroupMap[t.id];
     if (!g) return;
+
+    if (automatic.has(t.id)) {
+      guaranteedProgress.add(t.id);
+      return;
+    }
 
     if (mustFinishTop1[t.id]) guaranteedWinGroup.add(t.id);
     if (!canFinishTop1[t.id]) eliminatedWinGroup.add(t.id);

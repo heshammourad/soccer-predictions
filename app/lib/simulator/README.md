@@ -14,6 +14,7 @@ This directory houses the TypeScript tournament simulation framework. It utilize
   * `worldCup.ts`: 2026 World Cup adapter (12 groups, best 8 third-place qualifiers, 32-team knockout bracket).
   * `worldCupMatchupScenarios.ts`: Matrix index lookup for matching World Cup third-place teams.
   * `nationsLeagueA.ts`: 2026-27 UEFA Nations League A adapter (4 double round-robin groups, two-legged quarterfinals, Finals with a dynamically chosen host).
+  * `africaCupQualifiers.ts`: 2027 Africa Cup of Nations qualifiers (12 double round-robin groups, top two qualify, hosts already qualified; `qualified` is the only milestone).
   * `nationsLeague.ts`: Leagues A-C simulated together, with the cross-league promotion/relegation playoffs (see below).
 
 ---

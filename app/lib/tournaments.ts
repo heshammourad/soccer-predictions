@@ -1,4 +1,5 @@
 import { calculateMathematicalStatus, calculateGroupTop2Status, SimpleTeam, SimpleMatch } from './simulator/mathematicalStatus';
+import { AFCON_HOSTS } from './simulator/config/africaCupQualifiers';
 
 export interface MathStatus {
   guaranteedProgress: Set<string>;
@@ -67,6 +68,22 @@ const NATIONS_LEAGUE_MILESTONE_DATES: TournamentDescriptor['milestoneDates'] = {
   'Playoffs & Quarterfinals Completed': '2027-03-30T23:59:59Z',
   'Semifinals Completed': '2027-06-10T23:59:59Z',
   'Current Projections': undefined,
+};
+
+// The AFCON qualifiers' only outcome is qualifying, which the dashboard reads
+// from the group-phase milestone's status sets. The status enumeration is 6^k
+// per group, so it is skipped until at most 6 matches of a group remain
+// (i.e. from the third matchday onward).
+const calculateAfconQualifierStatus: TournamentDescriptor['calculateMathStatus'] = (teams, results, fixtures) => {
+  const status = calculateGroupTop2Status(teams, results, fixtures, {
+    automaticQualifiers: AFCON_HOSTS,
+    maxRemainingPerGroup: 6,
+  });
+  return {
+    ...status,
+    guaranteedWinGroup: status.guaranteedProgress,
+    eliminatedWinGroup: status.mathematicallyEliminated,
+  };
 };
 
 export const TOURNAMENTS: TournamentDescriptor[] = [
@@ -153,6 +170,32 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
     dimEliminatedTeams: false,
     milestoneDates: NATIONS_LEAGUE_MILESTONE_DATES,
     calculateMathStatus: calculateWinGroupOnlyStatus,
+  },
+  {
+    code: 'FQ',
+    name: '2027 Africa Cup of Nations Qualifiers',
+    milestones: ['qualified'],
+    knockoutStages: [],
+    milestoneLabels: {
+      qualified: 'Qualify',
+    },
+    groupPhaseMilestone: 'qualified',
+    keepGroupPhaseMilestoneAfterGroupStage: true,
+    // Group stage 24 Sep 2026 - 30 Mar 2027 (6 matchdays; matchdays 3-6 are
+    // dated by placeholder days inside the Nov and Mar windows until the real
+    // days are published). Hosts KE/TZ/UG are already qualified. Keep in sync
+    // with scripts/sync.ts.
+    milestoneDates: {
+      'Start (Pre-tournament)': '2026-09-23T23:59:59Z',
+      'Matchday 1 Completed': '2026-09-27T23:59:59Z',
+      'Matchday 2 Completed': '2026-10-07T23:59:59Z',
+      'Matchday 3 Completed': '2026-11-13T23:59:59Z',
+      'Matchday 4 Completed': '2026-11-17T23:59:59Z',
+      'Matchday 5 Completed': '2027-03-27T23:59:59Z',
+      'Tournament Completed': '2027-03-30T23:59:59Z',
+      'Current Projections': undefined,
+    },
+    calculateMathStatus: calculateAfconQualifierStatus,
   },
 ];
 
