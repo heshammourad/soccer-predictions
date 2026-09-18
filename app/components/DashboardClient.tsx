@@ -249,6 +249,23 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
       tournament.dimEliminatedTeams !== false && mathStatus.mathematicallyEliminated.has(r.teamId);
   });
 
+  // Points (3 / 1 / 0) and games played from this run's completed group-phase
+  // matches, shown under each team's name to explain a projection.
+  const groupRecord: { [teamId: string]: { pts: number; pld: number } } = {};
+  activeResults.forEach((m) => {
+    if (m.isKnockout || m.homeGoals === null || m.awayGoals === null) return;
+    const home = (groupRecord[m.homeTeamId] ??= { pts: 0, pld: 0 });
+    const away = (groupRecord[m.awayTeamId] ??= { pts: 0, pld: 0 });
+    home.pld++;
+    away.pld++;
+    if (m.homeGoals > m.awayGoals) home.pts += 3;
+    else if (m.homeGoals < m.awayGoals) away.pts += 3;
+    else {
+      home.pts++;
+      away.pts++;
+    }
+  });
+
   const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) => {
     let isGuaranteed = false;
     let isEliminated = false;
@@ -574,9 +591,16 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                             className="h-4 w-auto max-w-[26px] rounded-sm shadow-sm border border-slate-850"
                             loading="lazy"
                           />
-                          <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
-                            {r.team.name}
-                          </span>
+                          <div className="flex flex-col leading-tight">
+                            <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
+                              {r.team.name}
+                            </span>
+                            {isGroupStage && groupRecord[r.teamId] && (
+                              <span className="text-[11px] font-normal text-slate-500">
+                                {groupRecord[r.teamId].pts} pts · {groupRecord[r.teamId].pld} pld
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {isGroupStage && (
                           <td className="py-3 px-4 text-center font-bold text-slate-400">
