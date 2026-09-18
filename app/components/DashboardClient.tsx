@@ -584,13 +584,16 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                     return (
                       <tr key={r.teamId} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
                         <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={getFlagUrl(r.teamId)}
-                            alt={`${r.team.name} flag`}
-                            className="h-4 w-auto max-w-[26px] rounded-sm shadow-sm border border-slate-850"
-                            loading="lazy"
-                          />
+                          {/* Flags vary in aspect ratio; a fixed-width box keeps the names aligned. */}
+                          <span className="flex w-[26px] shrink-0 justify-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={getFlagUrl(r.teamId)}
+                              alt={`${r.team.name} flag`}
+                              className="h-4 w-auto max-w-full rounded-sm shadow-sm border border-slate-850"
+                              loading="lazy"
+                            />
+                          </span>
                           <div className="flex flex-col leading-tight">
                             <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
                               {r.team.name}
