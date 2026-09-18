@@ -171,6 +171,13 @@ const weights: { [tournament: string]: number } = {
   // League isn't a qualifier or a continental championship final
   // tournament, so it falls in the "all other tournaments" tier (matching
   // BLC/FT/IOG/KNG/WIT below) rather than EC's 50.
+  //
+  // TODO: re-validate against the 2026-27 League A results once played
+  // (first match 2026-09-23). Regressing calculateRatingChange's predicted
+  // change against actual eloratings.net ratingChange values for the
+  // 2024-25 League A season (40 matches) gave a best-fit K of ~36 vs. the
+  // 30 used here (MAE ~3.7 rating points either way) -- inconclusive with
+  // that little data, but worth rechecking with a full season.
   ENA: 30,
   EQ: 40,
   F: 20,
