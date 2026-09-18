@@ -130,6 +130,10 @@ export function sortGroupTeamsWithH2H(
     return resolved;
   };
 
+  if (teams.length === 0) {
+    throw new Error('sortGroupTeamsWithH2H called with an empty group; this should never happen in a normal simulation.');
+  }
+
   // First sort overall by points descending.
   const sortedByPoints = [...teams].sort((a, b) => b.points - a.points);
 

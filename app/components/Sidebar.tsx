@@ -3,14 +3,11 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { TOURNAMENTS } from '../lib/tournaments';
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-
-  const tournaments = [
-    { code: 'WC', name: '2026 World Cup' },
-  ];
 
   const isActive = (path: string) => pathname === path;
 
@@ -74,7 +71,7 @@ export default function Sidebar() {
                 Tournaments
               </h3>
               <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1">
-                {tournaments.map((t) => {
+                {TOURNAMENTS.map((t) => {
                   const path = `/tournament/${t.code}`;
                   return (
                     <Link

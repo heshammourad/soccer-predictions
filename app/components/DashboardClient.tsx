@@ -4,26 +4,20 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { triggerSimulation } from '../actions/simulate';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
-import { calculateMathematicalStatus } from '../lib/simulator/mathematicalStatus';
+import { TOURNAMENTS, getTournament } from '../lib/tournaments';
 
 interface Team {
   id: string;
   name: string;
   currentElo: number;
-  group: string | null;
 }
 
 interface Prediction {
   id: number;
   teamId: string;
   tournament: string;
-  winGroup: number;
-  roundOf32: number;
-  roundOf16: number;
-  champions: number;
-  final: number;
-  semifinals: number;
-  quarterfinals: number;
+  milestone: string;
+  probability: number;
   eloAtSimulation: number;
   updatedAt: Date;
   team: Team;
@@ -55,25 +49,26 @@ interface Props {
   simulationRuns: SimulationRun[];
   results: Match[];
   fixtures: Match[];
+  teamGroups: { [teamId: string]: string };
 }
 
-const MILESTONE_DATES: { [desc: string]: string | undefined } = {
-  'Start (Pre-tournament)': '2026-06-10T23:59:59Z',
-  'Matchday 1 Completed': '2026-06-17T23:59:59Z',
-  'Matchday 2 Completed': '2026-06-23T23:59:59Z',
-  'Matchday 3 Completed': '2026-06-27T23:59:59Z',
-  'Round of 32 Completed': '2026-07-03T23:59:59Z',
-  'Round of 16 Completed': '2026-07-08T23:59:59Z',
-  'Quarterfinals Completed': '2026-07-13T23:59:59Z',
-  'Semifinals Completed': '2026-07-17T23:59:59Z',
-  'Current Projections': undefined,
-};
+// One row per team for the active SimulationRun, pivoted from the flat
+// (team, milestone, probability) Prediction rows into a single record with
+// a lookup by milestone name.
+interface TeamRow {
+  teamId: string;
+  team: Team;
+  group: string | null;
+  eloAtSimulation: number;
+  updatedAt: Date;
+  values: { [milestone: string]: number };
+}
 
-type SortColumn = 'team' | 'group' | 'elo' | 'winGroup' | 'roundOf32' | 'roundOf16' | 'quarterfinals' | 'semifinals' | 'final' | 'champions';
-type SortDir = 'asc' | 'desc';
+type SortColumn = string; // 'team' | 'group' | 'elo' | a milestone name
 
-export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures }: Props) {
+export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures, teamGroups }: Props) {
   const router = useRouter();
+  const tournament = getTournament(activeTournament) ?? TOURNAMENTS[0];
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [activeTab, setActiveTab] = useState<'projections' | 'matches'>('projections');
@@ -83,7 +78,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     return simulationRuns.length > 0 ? simulationRuns[simulationRuns.length - 1].id : null;
   });
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -95,13 +90,30 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   };
 
   const activeRun = simulationRuns.find(run => run.id === selectedRunId);
-  const predictions = activeRun ? activeRun.predictions : [];
   const [isPending, startTransition] = useTransition();
   const [simMessage, setSimMessage] = useState('');
 
-  const tournamentNames: { [code: string]: string } = {
-    WC: '2026 World Cup',
-  };
+  // Pivot this run's flat Prediction rows into one row per team
+  const teamRows: TeamRow[] = React.useMemo(() => {
+    if (!activeRun) return [];
+    const rowsByTeam = new Map<string, TeamRow>();
+    activeRun.predictions.forEach((p) => {
+      let row = rowsByTeam.get(p.teamId);
+      if (!row) {
+        row = {
+          teamId: p.teamId,
+          team: p.team,
+          group: teamGroups[p.teamId] ?? null,
+          eloAtSimulation: p.eloAtSimulation,
+          updatedAt: p.updatedAt,
+          values: {},
+        };
+        rowsByTeam.set(p.teamId, row);
+      }
+      row.values[p.milestone] = p.probability;
+    });
+    return Array.from(rowsByTeam.values());
+  }, [activeRun, teamGroups]);
 
   const handleTournamentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -122,19 +134,19 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   };
 
   // Extract unique group letters
-  const groupsList = Array.from(new Set(predictions.map((p) => p.team.group).filter(Boolean))) as string[];
+  const groupsList = Array.from(new Set(teamRows.map((r) => r.group).filter(Boolean))) as string[];
   groupsList.sort();
 
   // Filter predictions
-  const filteredPredictions = predictions.filter((p) => {
-    const matchesSearch = p.team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.teamId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesGroup = selectedGroup === 'ALL' || p.team.group === selectedGroup;
+  const filteredRows = teamRows.filter((r) => {
+    const matchesSearch = r.team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          r.teamId.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesGroup = selectedGroup === 'ALL' || r.group === selectedGroup;
     return matchesSearch && matchesGroup;
   });
 
   const activeRunDescription = activeRun?.description || 'Current Projections';
-  const cutOffDateStr = MILESTONE_DATES[activeRunDescription];
+  const cutOffDateStr = tournament.milestoneDates[activeRunDescription];
   const cutOffDate = cutOffDateStr ? new Date(cutOffDateStr) : undefined;
 
   // Dynamically filter results and fixtures based on the active run's historical date
@@ -149,53 +161,38 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     return m.homeGoals === null;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const isGroupStage = 
-    activeRunDescription.includes('Start') ||
-    activeRunDescription.includes('Matchday 1') ||
-    activeRunDescription.includes('Matchday 2') ||
-    (activeRunDescription === 'Current Projections' && activeFixtures.some(f => !f.isKnockout));
+  // Still in the group/league phase if there are unplayed non-knockout
+  // fixtures as of this run's cutoff — true for every tournament shape,
+  // since it doesn't depend on this tournament's specific milestone names.
+  const isGroupStage = activeFixtures.some(f => !f.isKnockout);
 
-  const getTargetStageKey = (desc: string) => {
-    if (desc.includes('Start') || desc.includes('Matchday')) {
-      return 'roundOf32';
-    }
-    if (desc.includes('Round of 32')) {
-      return 'roundOf16';
-    }
-    if (desc.includes('Round of 16')) {
-      return 'quarterfinals';
-    }
-    if (desc.includes('Quarterfinals')) {
-      return 'semifinals';
-    }
-    if (desc.includes('Semifinals')) {
-      return 'final';
-    }
+  const knockoutStages = tournament.knockoutStages;
 
-    // Default or 'Current Projections' fallback: check predictions to find the active stage
-    const stages = ['roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'];
-    for (const stage of stages) {
-      const hasFractional = predictions.some(p => {
-        const val = p[stage as keyof Prediction] as number;
-        return val > 0 && val < 1;
+  const getTargetStageKey = () => {
+    // Find the earliest knockout stage that's still undecided (fractional)
+    // for at least one team in this run — that's the "current" stage.
+    for (const stage of knockoutStages) {
+      const hasFractional = teamRows.some((r) => {
+        const val = r.values[stage];
+        return val !== undefined && val > 0 && val < 1;
       });
       if (hasFractional) {
         return stage;
       }
     }
-    return 'champions';
+    return knockoutStages[knockoutStages.length - 1];
   };
 
   const simpleTeams = React.useMemo(() => {
-    return predictions.map((p) => ({
-      id: p.teamId,
-      name: p.team.name,
-      group: p.team.group,
+    return teamRows.map((r) => ({
+      id: r.teamId,
+      name: r.team.name,
+      group: r.group,
     }));
-  }, [predictions]);
+  }, [teamRows]);
 
   const mathStatus = React.useMemo(() => {
-    if (predictions.length === 0) {
+    if (teamRows.length === 0) {
       return {
         guaranteedProgress: new Set<string>(),
         mathematicallyEliminated: new Set<string>(),
@@ -203,9 +200,9 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
         eliminatedWinGroup: new Set<string>(),
       };
     }
-    
+
     if (isGroupStage) {
-      return calculateMathematicalStatus(
+      return tournament.calculateMathStatus(
         simpleTeams,
         activeResults.map(m => ({
           homeTeamId: m.homeTeamId,
@@ -223,19 +220,19 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
         }))
       );
     } else {
-      const targetStageKey = getTargetStageKey(activeRunDescription);
+      const targetStageKey = getTargetStageKey();
       const guaranteedProgress = new Set<string>();
       const mathematicallyEliminated = new Set<string>();
-      
-      predictions.forEach((p) => {
-        const val = p[targetStageKey as keyof Prediction] as number;
+
+      teamRows.forEach((r) => {
+        const val = r.values[targetStageKey];
         if (val === 1.0) {
-          guaranteedProgress.add(p.teamId);
+          guaranteedProgress.add(r.teamId);
         } else if (val === 0.0) {
-          mathematicallyEliminated.add(p.teamId);
+          mathematicallyEliminated.add(r.teamId);
         }
       });
-      
+
       return {
         guaranteedProgress,
         mathematicallyEliminated,
@@ -243,18 +240,19 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
         eliminatedWinGroup: new Set<string>(),
       };
     }
-  }, [predictions, isGroupStage, activeResults, activeFixtures, activeRunDescription, simpleTeams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamRows, isGroupStage, activeResults, activeFixtures, activeRunDescription, simpleTeams, tournament]);
 
   const isEliminatedMap: { [teamId: string]: boolean } = {};
-  predictions.forEach((p) => {
-    isEliminatedMap[p.teamId] = mathStatus.mathematicallyEliminated.has(p.teamId);
+  teamRows.forEach((r) => {
+    isEliminatedMap[r.teamId] = mathStatus.mathematicallyEliminated.has(r.teamId);
   });
 
   const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) => {
     let isGuaranteed = false;
     let isEliminated = false;
 
-    if (col === 'winGroup') {
+    if (tournament.groupPhaseMilestone && col === tournament.groupPhaseMilestone) {
       if (isGroupStage) {
         isGuaranteed = mathStatus.guaranteedWinGroup.has(teamId);
         isEliminated = mathStatus.eliminatedWinGroup.has(teamId);
@@ -262,18 +260,10 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
         isGuaranteed = val === 1.0;
         isEliminated = val === 0.0;
       }
-    } else if (
-      col === 'roundOf32' ||
-      col === 'roundOf16' ||
-      col === 'quarterfinals' ||
-      col === 'semifinals' ||
-      col === 'final' ||
-      col === 'champions'
-    ) {
-      const targetStageKey = getTargetStageKey(activeRunDescription);
-      const stages = ['roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'];
-      const targetIndex = stages.indexOf(targetStageKey);
-      const colIndex = stages.indexOf(col);
+    } else if (knockoutStages.includes(col)) {
+      const targetStageKey = getTargetStageKey();
+      const targetIndex = knockoutStages.indexOf(targetStageKey);
+      const colIndex = knockoutStages.indexOf(col);
 
       if (colIndex >= targetIndex) {
         isEliminated = mathStatus.mathematicallyEliminated.has(teamId);
@@ -304,47 +294,50 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     return `${Math.round(eff * 100)}%`;
   };
 
+  const championsMilestone = tournament.milestones[tournament.milestones.length - 1];
+
   // Sort predictions based on whether it is group stage or knockout stage
-  const sortedPredictions = React.useMemo(() => {
-    return [...filteredPredictions].sort((a, b) => {
+  const sortedRows = React.useMemo(() => {
+    return [...filteredRows].sort((a, b) => {
       // If user has selected a sort column, use that
       if (sortColumn) {
         let cmp = 0;
         if (sortColumn === 'team') {
           cmp = a.team.name.localeCompare(b.team.name);
         } else if (sortColumn === 'group') {
-          cmp = (a.team.group || '').localeCompare(b.team.group || '') || 
-                (getEffectiveProbability(b.champions, b.teamId, 'champions') - getEffectiveProbability(a.champions, a.teamId, 'champions'));
+          cmp = (a.group || '').localeCompare(b.group || '') ||
+                (getEffectiveProbability(b.values[championsMilestone] ?? 0, b.teamId, championsMilestone) -
+                 getEffectiveProbability(a.values[championsMilestone] ?? 0, a.teamId, championsMilestone));
         } else if (sortColumn === 'elo') {
           cmp = a.team.currentElo - b.team.currentElo;
         } else {
-          cmp = getEffectiveProbability(a[sortColumn] as number, a.teamId, sortColumn) - 
-                getEffectiveProbability(b[sortColumn] as number, b.teamId, sortColumn);
+          cmp = getEffectiveProbability(a.values[sortColumn] ?? 0, a.teamId, sortColumn) -
+                getEffectiveProbability(b.values[sortColumn] ?? 0, b.teamId, sortColumn);
         }
         return sortDir === 'desc' ? -cmp : cmp;
       }
 
       // Default: group stage → group first, then success metrics
       if (isGroupStage) {
-        const groupA = a.team.group || '';
-        const groupB = b.team.group || '';
+        const groupA = a.group || '';
+        const groupB = b.group || '';
         if (groupA !== groupB) {
           return groupA.localeCompare(groupB);
         }
       }
-      // Sort by success metrics descending using effective probabilities
-      return (
-        (getEffectiveProbability(b.champions, b.teamId, 'champions') - getEffectiveProbability(a.champions, a.teamId, 'champions')) ||
-        (getEffectiveProbability(b.final, b.teamId, 'final') - getEffectiveProbability(a.final, a.teamId, 'final')) ||
-        (getEffectiveProbability(b.semifinals, b.teamId, 'semifinals') - getEffectiveProbability(a.semifinals, a.teamId, 'semifinals')) ||
-        (getEffectiveProbability(b.quarterfinals, b.teamId, 'quarterfinals') - getEffectiveProbability(a.quarterfinals, a.teamId, 'quarterfinals')) ||
-        (getEffectiveProbability(b.roundOf16, b.teamId, 'roundOf16') - getEffectiveProbability(a.roundOf16, a.teamId, 'roundOf16')) ||
-        (getEffectiveProbability(b.roundOf32, b.teamId, 'roundOf32') - getEffectiveProbability(a.roundOf32, a.teamId, 'roundOf32')) ||
-        (getEffectiveProbability(b.winGroup, b.teamId, 'winGroup') - getEffectiveProbability(a.winGroup, a.teamId, 'winGroup')) ||
-        b.team.currentElo - a.team.currentElo
-      );
+      // Sort by success metrics descending using effective probabilities,
+      // from the last (biggest) milestone down to the first.
+      for (let i = tournament.milestones.length - 1; i >= 0; i--) {
+        const milestone = tournament.milestones[i];
+        const diff =
+          getEffectiveProbability(b.values[milestone] ?? 0, b.teamId, milestone) -
+          getEffectiveProbability(a.values[milestone] ?? 0, a.teamId, milestone);
+        if (diff !== 0) return diff;
+      }
+      return b.team.currentElo - a.team.currentElo;
     });
-  }, [filteredPredictions, sortColumn, sortDir, isGroupStage, mathStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredRows, sortColumn, sortDir, isGroupStage, mathStatus, tournament]);
 
   // Helper to calculate cell background style (green-white gradient overlay)
   const getCellBgStyle = (val: number, text: string, teamId?: string) => {
@@ -361,6 +354,20 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     };
   };
 
+  // Columns to render: team/group/elo, then this tournament's milestones
+  // (group-phase milestone hidden once we're past the group stage).
+  const visibleMilestones = tournament.milestones.filter((m) => {
+    if (tournament.groupPhaseMilestone && m === tournament.groupPhaseMilestone) return isGroupStage;
+    return true;
+  });
+  const columns: SortColumn[] = ['team', ...(isGroupStage ? ['group'] : []), 'elo', ...visibleMilestones];
+  const columnLabels: Record<string, string> = {
+    team: 'Team',
+    group: 'Group',
+    elo: 'ELO',
+    ...tournament.milestoneLabels,
+  };
+
   return (
     <div className="space-y-8">
       {/* Simulation Controls & Notification */}
@@ -368,9 +375,9 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
         <div>
           <h2 className="text-lg font-semibold text-slate-100">Monte Carlo Projections</h2>
           <p className="text-sm text-slate-400">
-            {predictions.length > 0
+            {teamRows.length > 0
               ? `Based on 10,000 simulation runs. Last updated: ${new Date(
-                  predictions[0].updatedAt
+                  teamRows[0].updatedAt
                 ).toLocaleString()}`
               : 'No simulation data found in database. Please run the simulation.'}
           </p>
@@ -460,7 +467,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                     onChange={handleTournamentChange}
                     className="w-full sm:w-56 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer"
                   >
-                    {Object.entries(tournamentNames).map(([code, name]) => (
+                    {TOURNAMENTS.map(({ code, name }) => (
                       <option key={code} value={code} className="bg-slate-950 text-slate-300">
                         {name}
                       </option>
@@ -520,7 +527,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
             </div>
           </div>
 
-          {predictions.length === 0 ? (
+          {teamRows.length === 0 ? (
             <div className="text-center p-12 bg-slate-900/20 border border-slate-800 rounded-2xl">
               <p className="text-slate-400 text-base mb-4">No prediction records found in NeonDB.</p>
               <p className="text-sm text-slate-500">Run the simulation above to calculate predictions!</p>
@@ -530,16 +537,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               <table className="w-full text-left border-collapse min-w-[900px]">
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-900/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
-                    {(['team', 'group', 'elo', 'winGroup', 'roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'] as SortColumn[]).filter(col => {
-                      if (col === 'group' && !isGroupStage) return false;
-                      if (col === 'winGroup' && !isGroupStage) return false;
-                      return true;
-                    }).map(col => {
-                      const labels: Record<SortColumn, string> = {
-                        team: 'Team', group: 'Group', elo: 'ELO',
-                        winGroup: 'Win Group', roundOf32: 'Round of 32', roundOf16: 'Round of 16',
-                        quarterfinals: 'Quarterfinals', semifinals: 'Semifinals', final: 'Finalist', champions: 'Champion'
-                      };
+                    {columns.map(col => {
                       const isSorted = sortColumn === col;
                       const arrow = isSorted ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
                       const isTeam = col === 'team';
@@ -549,68 +547,52 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                           onClick={() => handleSort(col)}
                           className={`py-4 ${isTeam ? 'px-5 text-left' : 'px-4 text-center w-28'} cursor-pointer hover:text-slate-200 transition whitespace-nowrap ${isSorted ? 'text-indigo-400' : ''}`}
                         >
-                          {labels[col]}{arrow}
+                          {columnLabels[col] ?? col}{arrow}
                         </th>
                       );
                     })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50 text-sm text-slate-300">
-                  {sortedPredictions.map((p) => {
-                    const isEliminated = isEliminatedMap[p.teamId];
-                    const winGroupTxt = formatProbability(p.winGroup, p.teamId, 'winGroup');
-                    const roundOf32Txt = formatProbability(p.roundOf32, p.teamId, 'roundOf32');
-                    const roundOf16Txt = formatProbability(p.roundOf16, p.teamId, 'roundOf16');
-                    const quarterfinalsTxt = formatProbability(p.quarterfinals, p.teamId, 'quarterfinals');
-                    const semifinalsTxt = formatProbability(p.semifinals, p.teamId, 'semifinals');
-                    const finalTxt = formatProbability(p.final, p.teamId, 'final');
-                    const championsTxt = formatProbability(p.champions, p.teamId, 'champions');
+                  {sortedRows.map((r) => {
+                    const isEliminated = isEliminatedMap[r.teamId];
 
                     return (
-                      <tr key={p.id} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
+                      <tr key={r.teamId} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
                         <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={getFlagUrl(p.teamId)}
-                            alt={`${p.team.name} flag`}
+                            src={getFlagUrl(r.teamId)}
+                            alt={`${r.team.name} flag`}
                             className="h-4 w-auto max-w-[26px] rounded-sm shadow-sm border border-slate-850"
                             loading="lazy"
                           />
                           <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
-                            {p.team.name}
+                            {r.team.name}
                           </span>
                         </td>
                         {isGroupStage && (
                           <td className="py-3 px-4 text-center font-bold text-slate-400">
-                            {p.team.group}
+                            {r.group}
                           </td>
                         )}
                         <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">
-                          {p.eloAtSimulation || p.team.currentElo}
+                          {r.eloAtSimulation || r.team.currentElo}
                         </td>
-                        {isGroupStage && (
-                          <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.winGroup, winGroupTxt, p.teamId)}>
-                            {winGroupTxt}
-                          </td>
-                        )}
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf32, roundOf32Txt, p.teamId)}>
-                          {roundOf32Txt}
-                        </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.roundOf16, roundOf16Txt, p.teamId)}>
-                          {roundOf16Txt}
-                        </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.quarterfinals, quarterfinalsTxt, p.teamId)}>
-                          {quarterfinalsTxt}
-                        </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.semifinals, semifinalsTxt, p.teamId)}>
-                          {semifinalsTxt}
-                        </td>
-                        <td className="py-3 px-4 text-center font-semibold font-mono" style={getCellBgStyle(p.final, finalTxt, p.teamId)}>
-                          {finalTxt}
-                        </td>
-                        <td className="py-3 px-4 text-center font-bold font-mono" style={getCellBgStyle(p.champions, championsTxt, p.teamId)}>
-                          {championsTxt}
-                        </td>
+                        {visibleMilestones.map((milestone) => {
+                          const val = r.values[milestone] ?? 0;
+                          const txt = formatProbability(val, r.teamId, milestone);
+                          const isChampions = milestone === championsMilestone;
+                          return (
+                            <td
+                              key={milestone}
+                              className={`py-3 px-4 text-center font-mono ${isChampions ? 'font-bold' : 'font-semibold'}`}
+                              style={getCellBgStyle(val, txt, r.teamId)}
+                            >
+                              {txt}
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
                   })}

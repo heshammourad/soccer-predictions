@@ -35,9 +35,24 @@ function readDataFile(filePath: string): string {
   }
 }
 
+// Knockout stage start date per tournament, used to classify a seeded match
+// as a group/league-phase match vs. a knockout match. Add an entry here for
+// each tournament with a knockout phase.
+const KNOCKOUT_CUTOFFS: { [tournament: string]: Date } = {
+  WC: new Date('2026-06-28'),
+  ENA: new Date('2027-03-25'), // first League A quarterfinal leg
+};
+
+function isKnockoutMatch(tourney: string, date: Date): boolean {
+  const cutoff = KNOCKOUT_CUTOFFS[tourney];
+  return cutoff !== undefined && date >= cutoff;
+}
+
 async function main() {
   console.log('Clearing database tables...');
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Prediction", "Match", "Team", "SimulationRun" CASCADE;');
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "Prediction", "Match", "Team", "SimulationRun", "TeamTournamentGroup" CASCADE;'
+  );
 
   const confederationsPath = path.join(__dirname, '../app/lib/simulator/config/confederations.json');
   const confederationsMap: { [code: string]: string } = fs.existsSync(confederationsPath)
@@ -94,28 +109,12 @@ async function main() {
     }
   }
 
-  console.log('Reading World Cup groups...');
-  // 3. Read WC/groups to assign groups for World Cup (default tournament)
-  const wcGroupsPath = path.join(DATA_DIR, 'WC/groups');
-  const groupsInfo: { [teamCode: string]: string } = {};
-  if (fs.existsSync(wcGroupsPath)) {
-    const groupsObj = JSON.parse(fs.readFileSync(wcGroupsPath, 'utf8'));
-    for (const [groupLetter, teams] of Object.entries(groupsObj)) {
-      if (Array.isArray(teams)) {
-        for (const t of teams) {
-          groupsInfo[t] = groupLetter;
-        }
-      }
-    }
-  }
-
-  // 4. Create Teams in database
+  // 3. Create Teams in database
   console.log('Inserting teams...');
   const allCodes = Array.from(new Set([...Object.keys(teamNames), ...Object.keys(teamRatings)]));
   for (const code of allCodes) {
     const name = teamNames[code] || code;
     const currentElo = teamRatings[code] ?? 1000; // Default if not in ratings
-    const group = groupsInfo[code] || null;
     const confederation = confederationsMap[code] || null;
     const eloChange1Yr = teamEloChange1Yr[code] ?? 0;
     const rankChange1Yr = teamRankChange1Yr[code] ?? 0;
@@ -125,7 +124,6 @@ async function main() {
         id: code,
         name,
         currentElo,
-        group,
         confederation,
         eloChange1Yr,
         rankChange1Yr
@@ -134,8 +132,9 @@ async function main() {
   }
   console.log(`Seeded ${allCodes.length} teams.`);
 
-  // 5. Ingest Matches (results and fixtures) for all available tournaments
-  const tournaments = ['WC'];
+  // 4. Ingest Matches (results and fixtures), and per-tournament group
+  // assignments, for all available tournaments
+  const tournaments = ['WC', 'ENA'];
   for (const tourney of tournaments) {
     const tourneyDir = path.join(DATA_DIR, tourney);
     if (!fs.existsSync(tourneyDir)) continue;
@@ -187,7 +186,7 @@ async function main() {
           }
 
           // If date is after knockouts stage start
-          const isKnockout = tourney === 'WC' && date >= new Date('2026-06-28');
+          const isKnockout = isKnockoutMatch(tourney, date);
           const location = fields[8] && fields[8].trim() ? fields[8].trim() : team1;
           const ratingChange = fields[9] ? parseInt(fields[9].trim(), 10) || 0 : 0;
 
@@ -251,7 +250,7 @@ async function main() {
             allCodes.push(team2);
           }
 
-          const isKnockout = tourney === 'WC' && date >= new Date('2026-06-28');
+          const isKnockout = isKnockoutMatch(tourney, date);
           const location = fields[6] ? fields[6].trim() : 'XX';
 
           await prisma.match.create({
@@ -272,6 +271,25 @@ async function main() {
       }
     }
     console.log(`Seeded ${fixturesCount} fixtures for ${tourney}.`);
+
+    // Load this tournament's group assignments (per-tournament, so e.g. WC's
+    // groups and ENA's groups never clobber each other for shared teams)
+    const groupsPath = path.join(tourneyDir, 'groups');
+    let groupsCount = 0;
+    if (fs.existsSync(groupsPath)) {
+      const groupsObj = JSON.parse(fs.readFileSync(groupsPath, 'utf8'));
+      for (const [groupLetter, teamCodes] of Object.entries(groupsObj)) {
+        if (!Array.isArray(teamCodes)) continue;
+        for (const teamCode of teamCodes) {
+          if (!allCodes.includes(teamCode)) continue;
+          await prisma.teamTournamentGroup.create({
+            data: { teamId: teamCode, tournament: tourney, group: groupLetter }
+          });
+          groupsCount++;
+        }
+      }
+    }
+    console.log(`Seeded ${groupsCount} group assignments for ${tourney}.`);
   }
 }
 

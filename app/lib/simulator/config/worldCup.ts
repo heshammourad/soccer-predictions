@@ -7,6 +7,7 @@ export class WorldCup48Config implements TournamentConfig {
   name = '2026 World Cup';
   groups = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
   knockoutStages = ['roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'];
+  milestones = ['winGroup', 'roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'];
   groupStageDefaultLocation = 'US';
 
   private locationsWC = [
@@ -44,6 +45,18 @@ export class WorldCup48Config implements TournamentConfig {
       return null;
     };
     return sortGroupTeamsWithH2H(teams, getMatchResult);
+  }
+
+  evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {
+    const milestones: { [teamId: string]: string[] } = {};
+    this.groups.forEach((group) => {
+      const standings = rankedStandings[group];
+      if (standings && standings.length > 0) {
+        const groupWinnerId = standings[0].teamId;
+        milestones[groupWinnerId] = [...(milestones[groupWinnerId] ?? []), 'winGroup'];
+      }
+    });
+    return milestones;
   }
 
   buildKnockoutBracket(groupStandings: GroupStandings): Matchup[] {

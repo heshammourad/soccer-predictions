@@ -3,15 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { SimulatorEngine } from '../lib/simulator/engine';
 import { WorldCup48Config } from '../lib/simulator/config/worldCup';
+import { NationsLeagueAConfig } from '../lib/simulator/config/nationsLeagueA';
 
 export async function triggerSimulation(tournamentCode: string) {
   try {
     const code = tournamentCode.toUpperCase();
     console.log(`Starting simulation for ${code} via TypeScript engine...`);
-    
+
     let config;
     if (code === 'WC') {
       config = new WorldCup48Config();
+    } else if (code === 'ENA') {
+      config = new NationsLeagueAConfig();
     } else {
       throw new Error(`Simulation configuration not yet implemented for tournament code: ${tournamentCode}`);
     }

@@ -433,3 +433,135 @@ export function calculateMathematicalStatus(
     eliminatedWinGroup
   };
 }
+
+// Simpler group-phase status for tournaments where only the top 2 of each
+// group advance and there's no cross-group "best third place" comparison
+// (e.g. the 2026-27 Nations League A's 4-team groups) — unlike
+// calculateMathematicalStatus above, this never needs to compare one
+// group's standings against another's.
+export function calculateGroupTop2Status(
+  teams: SimpleTeam[],
+  results: SimpleMatch[],
+  fixtures: SimpleMatch[]
+) {
+  const teamGroupMap: Record<string, string> = {};
+  const groupTeams: Record<string, string[]> = {};
+  const allGroups = new Set<string>();
+
+  teams.forEach(t => {
+    if (t.group) {
+      teamGroupMap[t.id] = t.group;
+      allGroups.add(t.group);
+      if (!groupTeams[t.group]) groupTeams[t.group] = [];
+      groupTeams[t.group].push(t.id);
+    }
+  });
+
+  const remainingGroupMatches = fixtures.filter(f => !f.isKnockout);
+  const guaranteedProgress = new Set<string>();
+  const mathematicallyEliminated = new Set<string>();
+  const guaranteedWinGroup = new Set<string>();
+  const eliminatedWinGroup = new Set<string>();
+
+  if (remainingGroupMatches.length === 0) {
+    return { guaranteedProgress, mathematicallyEliminated, guaranteedWinGroup, eliminatedWinGroup };
+  }
+
+  const playedGroupMatches = results.filter(r => !r.isKnockout);
+  if (playedGroupMatches.length === 0) {
+    return { guaranteedProgress, mathematicallyEliminated, guaranteedWinGroup, eliminatedWinGroup };
+  }
+
+  const OUTCOMES = [
+    [8, 0],
+    [1, 0],
+    [4, 4],
+    [0, 0],
+    [0, 1],
+    [0, 8]
+  ];
+
+  const canFinishTop1: Record<string, boolean> = {};
+  const mustFinishTop1: Record<string, boolean> = {};
+  const canFinishTop2: Record<string, boolean> = {};
+  const mustFinishTop2: Record<string, boolean> = {};
+
+  teams.forEach(t => {
+    canFinishTop1[t.id] = false;
+    mustFinishTop1[t.id] = true;
+    canFinishTop2[t.id] = false;
+    mustFinishTop2[t.id] = true;
+  });
+
+  allGroups.forEach(g => {
+    const groupTeamsList = groupTeams[g] || [];
+    const groupPlayedMatches = results.filter(m => !m.isKnockout && (teamGroupMap[m.homeTeamId] === g || teamGroupMap[m.awayTeamId] === g));
+    const groupUnplayedMatches = remainingGroupMatches.filter(m => teamGroupMap[m.homeTeamId] === g || teamGroupMap[m.awayTeamId] === g);
+
+    if (groupUnplayedMatches.length === 0) return;
+
+    if (groupPlayedMatches.length === 0) {
+      // Nothing decided yet: anyone could finish 1st or 2nd, no one is guaranteed.
+      groupTeamsList.forEach(id => {
+        canFinishTop1[id] = true;
+        canFinishTop2[id] = true;
+      });
+      return;
+    }
+
+    const generate = (index: number, currentMatches: SimpleMatch[]) => {
+      if (index === groupUnplayedMatches.length) {
+        const allMatches = [...groupPlayedMatches, ...currentMatches];
+        const sorted = sortGroup(groupTeamsList, allMatches);
+
+        let currentIndex = 1;
+        const rankRanges: Record<string, { best: number; worst: number }> = {};
+        sorted.forEach(sub => {
+          const size = sub.length;
+          const best = currentIndex;
+          const worst = currentIndex + size - 1;
+          sub.forEach(id => {
+            rankRanges[id] = { best, worst };
+          });
+          currentIndex += size;
+        });
+
+        groupTeamsList.forEach(id => {
+          const { best, worst } = rankRanges[id];
+          if (best === 1) canFinishTop1[id] = true;
+          if (worst > 1) mustFinishTop1[id] = false;
+          if (best <= 2) canFinishTop2[id] = true;
+          if (worst > 2) mustFinishTop2[id] = false;
+        });
+
+        return;
+      }
+
+      const match = groupUnplayedMatches[index];
+      OUTCOMES.forEach(([hG, aG]) => {
+        currentMatches.push({ ...match, homeGoals: hG, awayGoals: aG });
+        generate(index + 1, currentMatches);
+        currentMatches.pop();
+      });
+    };
+
+    generate(0, []);
+  });
+
+  teams.forEach(t => {
+    const g = teamGroupMap[t.id];
+    if (!g) return;
+
+    if (mustFinishTop1[t.id]) guaranteedWinGroup.add(t.id);
+    if (!canFinishTop1[t.id]) eliminatedWinGroup.add(t.id);
+    if (mustFinishTop2[t.id]) guaranteedProgress.add(t.id);
+    if (!canFinishTop2[t.id]) mathematicallyEliminated.add(t.id);
+  });
+
+  return {
+    guaranteedProgress,
+    mathematicallyEliminated,
+    guaranteedWinGroup,
+    eliminatedWinGroup
+  };
+}
