@@ -22,13 +22,27 @@ model Team {
   id            String   @id // Use the code from your project (e.g., "QA", "CI")
   name          String
   currentElo    Int
-  group         String?  // Current tournament group (e.g., "A", "B")
   confederation String?  // FIFA Confederation (e.g. "UEFA", "CONMEBOL")
   eloChange1Yr  Int?     // 1-Year rating change
   rankChange1Yr Int?     // 1-Year rank change
   homeMatches   Match[]  @relation("HomeTeam")
   awayMatches   Match[]  @relation("AwayTeam")
   predictions   Prediction[]
+  tournamentGroups TeamTournamentGroup[]
+}
+
+// A team's group in a specific tournament (e.g. Netherlands is in "F" for
+// WC but "A2" for the 2026-27 Nations League A) — kept per-tournament so
+// concurrently-tracked tournaments never clobber each other's group data.
+model TeamTournamentGroup {
+  id         Int    @id @default(autoincrement())
+  teamId     String
+  tournament String // e.g., "WC", "ENA"
+  group      String // e.g., "A", "A2"
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, tournament])
 }
 
 // Replaces your current results/fixtures arrays
@@ -57,22 +71,23 @@ model SimulationRun {
   predictions Prediction[]
 }
 
-// Stores the output of your simulation runs
+// Stores the output of your simulation runs. One row per (team, tracked
+// outcome) rather than fixed columns, since each TournamentConfig declares
+// its own set of tracked milestones (e.g. WC tracks "roundOf32"; a future
+// qualifiers-style tournament might track "playoffWinner" instead) and a
+// fixed-column shape would force every tournament into the same ladder.
 model Prediction {
   id                Int           @id @default(autoincrement())
   simulationRunId   Int
   teamId            String
   tournament        String
-  winGroup          Float         @default(0.0)
-  roundOf32         Float         @default(0.0)
-  roundOf16         Float         @default(0.0)
-  champions         Float         // Percentage (0.0 to 1.0)
-  final             Float
-  semifinals        Float
-  quarterfinals     Float
+  milestone         String        // e.g. "winGroup", "quarterfinals", "champions"
+  probability       Float         // 0.0 to 1.0
   eloAtSimulation   Int           @default(0) // ELO rating as of the simulation cutoff date
   updatedAt         DateTime      @default(now())
 
   simulationRun   SimulationRun @relation(fields: [simulationRunId], references: [id], onDelete: Cascade)
   team            Team          @relation(fields: [teamId], references: [id])
+
+  @@unique([simulationRunId, teamId, milestone])
 }

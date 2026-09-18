@@ -23,11 +23,17 @@ export class SimulatorEngine {
   async runSimulation() {
     // 1. Fetch all teams
     const teams = await prisma.team.findMany();
-    
+
     // 2. Fetch matches for this tournament
     const matches = await prisma.match.findMany({
       where: { tournament: this.config.code },
       orderBy: { date: 'asc' },
+    });
+
+    // 3. Fetch this tournament's team-group assignments (per-tournament, so
+    // different tournaments never overwrite each other's group data)
+    const teamTournamentGroups = await prisma.teamTournamentGroup.findMany({
+      where: { tournament: this.config.code },
     });
 
     const results = matches.filter((m) => {
@@ -67,12 +73,13 @@ export class SimulatorEngine {
     // Maps ELO and basic fields
     const initialEloMap: { [teamId: string]: number } = {};
     const teamGroupMap: { [teamId: string]: string } = {};
-    
+
     teams.forEach((t) => {
       initialEloMap[t.id] = t.currentElo;
-      if (t.group) {
-        teamGroupMap[t.id] = t.group;
-      }
+    });
+
+    teamTournamentGroups.forEach((tg) => {
+      teamGroupMap[tg.teamId] = tg.group;
     });
 
     // Reconstruct ELO ratings as of this milestone's date by reversing post-cutoff rating changes
@@ -93,7 +100,7 @@ export class SimulatorEngine {
 
     const tournamentTeamIds = Array.from(new Set(matches.flatMap((m) => [m.homeTeamId, m.awayTeamId])));
     const initialStandings: GroupStandings = {};
-    
+
     this.config.groups.forEach((g) => {
       initialStandings[g] = [];
     });
@@ -119,7 +126,7 @@ export class SimulatorEngine {
     // Populate actual played matches in initial standings
     results.forEach((match) => {
       if (match.isKnockout) return;
-      
+
       const homeStats = this.findTeamInStandings(initialStandings, match.homeTeamId);
       const awayStats = this.findTeamInStandings(initialStandings, match.awayTeamId);
 
@@ -128,32 +135,20 @@ export class SimulatorEngine {
       }
     });
 
-    // Accumulate results
-    const accumulator: {
-      [teamId: string]: {
-        winGroup: number;
-        champions: number;
-        final: number;
-        semifinals: number;
-        quarterfinals: number;
-        roundOf16: number;
-        roundOf32: number;
-      };
-    } = {};
+    // Accumulate results. The set of tracked milestones (and their meaning)
+    // is entirely declared by config.milestones, so different tournaments
+    // never share or clash over accumulator shape.
+    const accumulator: { [teamId: string]: { [milestone: string]: number } } = {};
 
     tournamentTeamIds.forEach((id) => {
-      accumulator[id] = {
-        winGroup: 0,
-        champions: 0,
-        final: 0,
-        semifinals: 0,
-        quarterfinals: 0,
-        roundOf16: 0,
-        roundOf32: 0,
-      };
+      accumulator[id] = {};
+      this.config.milestones.forEach((milestone) => {
+        accumulator[id][milestone] = 0;
+      });
     });
 
-    // Pre-calculate shootout winners map for real-world draws to avoid 64 million operations in MC loop
+    // Pre-calculate shootout winners map for real-world single-match draws to avoid
+    // 64 million operations in the MC loop
     const shootoutWinnersMap: { [matchId: number]: string } = {};
     matches.forEach((match) => {
       if (match.isKnockout && match.homeGoals !== null && match.awayGoals !== null && match.homeGoals === match.awayGoals) {
@@ -176,6 +171,8 @@ export class SimulatorEngine {
         }
       }
     });
+
+    const firstKnockoutStage = this.config.knockoutStages[0];
 
     // Monte Carlo loop
     for (let sim = 0; sim < this.simulationsCount; sim++) {
@@ -243,100 +240,76 @@ export class SimulatorEngine {
           ...simResults.filter((m) => !m.isKnockout)
         ];
         rankedStandings[g] = this.config.sortGroupStandings(simStandings[g], groupMatchesForSort);
+      });
 
-        if (rankedStandings[g] && rankedStandings[g].length > 0) {
-          const groupWinnerId = rankedStandings[g][0].teamId;
-          if (accumulator[groupWinnerId]) {
-            accumulator[groupWinnerId].winGroup++;
+      // Award group-phase milestones (e.g. "winGroup"). Each tournament
+      // declares its own meaning for these via evaluateGroupPhaseMilestones;
+      // a tournament with none simply omits the hook.
+      const groupPhaseMilestones = this.config.evaluateGroupPhaseMilestones?.(rankedStandings) ?? {};
+      Object.entries(groupPhaseMilestones).forEach(([teamId, milestoneNames]) => {
+        milestoneNames.forEach((milestone) => {
+          if (accumulator[teamId] && accumulator[teamId][milestone] !== undefined) {
+            accumulator[teamId][milestone]++;
           }
-        }
+        });
       });
 
       // C. Knockout stages
-      let stageMatches = this.config.buildKnockoutBracket(rankedStandings);
-      
-      // Increment roundOf32 counts
-      stageMatches.forEach((m) => {
-        if (accumulator[m.homeTeamId]) accumulator[m.homeTeamId].roundOf32++;
-        if (accumulator[m.awayTeamId]) accumulator[m.awayTeamId].roundOf32++;
-      });
+      let ties = this.groupIntoTies(this.config.buildKnockoutBracket(rankedStandings, knockoutMatches));
+
+      // Increment the "reached the first knockout stage" milestone once per team
+      if (firstKnockoutStage) {
+        const firstStageTeamIds = Array.from(new Set(ties.flat().flatMap((m) => [m.homeTeamId, m.awayTeamId])));
+        firstStageTeamIds.forEach((id) => {
+          if (accumulator[id] && accumulator[id][firstKnockoutStage] !== undefined) {
+            accumulator[id][firstKnockoutStage]++;
+          }
+        });
+      }
 
       let stageIndex = 0;
       let currentStageName = this.config.knockoutStages[0];
+      let dynamicHostTeamId: string | null = null;
 
-      while (stageMatches.length > 0) {
+      while (ties.length > 0) {
+        if (
+          currentStageName &&
+          this.config.dynamicHostStages?.includes(currentStageName) &&
+          dynamicHostTeamId === null
+        ) {
+          const candidateTeamIds = Array.from(new Set(ties.flat().flatMap((m) => [m.homeTeamId, m.awayTeamId])));
+          dynamicHostTeamId = this.config.selectDynamicHost?.(currentStageName, candidateTeamIds) ?? null;
+        }
+
         const nextStageName = this.config.knockoutStages[stageIndex + 1];
         const winners: string[] = [];
 
-        for (let mIdx = 0; mIdx < stageMatches.length; mIdx++) {
-          const match = stageMatches[mIdx];
-          
-          const actualResult = knockoutMatches.find(
-            (m) =>
-              (m.homeTeamId === match.homeTeamId && m.awayTeamId === match.awayTeamId) ||
-              (m.homeTeamId === match.awayTeamId && m.awayTeamId === match.homeTeamId)
-          );
+        for (let tIdx = 0; tIdx < ties.length; tIdx++) {
+          const tieMatchups = ties[tIdx];
+          let winner: string;
 
-          let winner = '';
-
-          if (actualResult && actualResult.homeGoals !== null && actualResult.awayGoals !== null) {
-            if (actualResult.homeGoals > actualResult.awayGoals) {
-              winner = actualResult.homeTeamId;
-            } else if (actualResult.awayGoals > actualResult.homeGoals) {
-              winner = actualResult.awayTeamId;
-            } else {
-              // Draw: determine who won the penalty shootout by checking who advanced to a subsequent round in matches
-              winner = shootoutWinnersMap[actualResult.id] || (Math.random() < 0.5 ? actualResult.homeTeamId : actualResult.awayTeamId);
-            }
+          if (tieMatchups.length === 2) {
+            winner = this.resolveTwoLeggedTie(tieMatchups, knockoutMatches, simElo);
           } else {
-            const location = this.config.getKnockoutMatchLocation(currentStageName, mIdx);
-            const homeAdvantage = (location === match.homeTeamId) ? 100 : 0;
-            const awayAdvantage = (location === match.awayTeamId) ? 100 : 0;
-            const homeElo = simElo[match.homeTeamId] + homeAdvantage;
-            const awayElo = simElo[match.awayTeamId] + awayAdvantage;
-
-            const isHomeFav = homeElo >= awayElo;
-            const favUnderdogDiff = Math.abs(homeElo - awayElo);
-            let marginResult = simulateResult(favUnderdogDiff);
-
-            let isDraw = marginResult === 0;
-            let shootoutWinner = '';
-            if (isDraw) {
-              marginResult = Math.round(simulateResult(favUnderdogDiff * 0.4) / 2.5);
-              isDraw = marginResult === 0;
-              if (isDraw) {
-                const we = 1 / (Math.pow(10, -favUnderdogDiff / 400) + 1);
-                const penaltyWe = 0.5 + (we - 0.5) / 4;
-                shootoutWinner = Math.random() <= penaltyWe ? (isHomeFav ? match.homeTeamId : match.awayTeamId) : (isHomeFav ? match.awayTeamId : match.homeTeamId);
-              }
-            }
-
-            if (shootoutWinner) {
-              winner = shootoutWinner;
-            } else if (marginResult > 0) {
-              winner = isHomeFav ? match.homeTeamId : match.awayTeamId;
-            } else {
-              winner = isHomeFav ? match.awayTeamId : match.homeTeamId;
-            }
-
-            const favTeam = isHomeFav ? match.homeTeamId : match.awayTeamId;
-            const undTeam = isHomeFav ? match.awayTeamId : match.homeTeamId;
-            const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, this.config.code);
-            simElo[favTeam] += ratingChange;
-            simElo[undTeam] -= ratingChange;
+            winner = this.resolveSingleKnockoutMatch(
+              tieMatchups[0],
+              tIdx,
+              currentStageName,
+              knockoutMatches,
+              shootoutWinnersMap,
+              simElo,
+              dynamicHostTeamId
+            );
           }
 
           winners.push(winner);
 
-          if (accumulator[winner] && nextStageName) {
-            const nextStageKey = nextStageName as keyof typeof accumulator[string];
-            if (accumulator[winner][nextStageKey] !== undefined) {
-              accumulator[winner][nextStageKey]++;
-            }
+          if (accumulator[winner] && nextStageName && accumulator[winner][nextStageName] !== undefined) {
+            accumulator[winner][nextStageName]++;
           }
         }
 
-        if (stageMatches.length === 1) {
+        if (ties.length === 1) {
           break;
         }
 
@@ -350,7 +323,7 @@ export class SimulatorEngine {
           });
         }
 
-        stageMatches = nextStageMatches;
+        ties = this.groupIntoTies(nextStageMatches);
         stageIndex++;
         currentStageName = nextStageName;
       }
@@ -380,32 +353,207 @@ export class SimulatorEngine {
     });
 
     for (const [teamId, totals] of Object.entries(accumulator)) {
-      const winGroup = totals.winGroup / this.simulationsCount;
-      const roundOf32 = totals.roundOf32 / this.simulationsCount;
-      const roundOf16 = totals.roundOf16 / this.simulationsCount;
-      const champions = totals.champions / this.simulationsCount;
-      const final = totals.final / this.simulationsCount;
-      const semifinals = totals.semifinals / this.simulationsCount;
-      const quarterfinals = totals.quarterfinals / this.simulationsCount;
-
-      await prisma.prediction.create({
-        data: {
-          simulationRunId: run.id,
-          teamId,
-          tournament: this.config.code,
-          winGroup,
-          roundOf32,
-          roundOf16,
-          champions,
-          final,
-          semifinals,
-          quarterfinals,
-          eloAtSimulation: Math.round(initialEloMap[teamId] ?? 0),
-        },
-      });
+      const eloAtSimulation = Math.round(initialEloMap[teamId] ?? 0);
+      for (const milestone of this.config.milestones) {
+        await prisma.prediction.create({
+          data: {
+            simulationRunId: run.id,
+            teamId,
+            tournament: this.config.code,
+            milestone,
+            probability: totals[milestone] / this.simulationsCount,
+            eloAtSimulation,
+          },
+        });
+      }
     }
 
     console.log(`Successfully completed all simulations for ${this.config.code} (${this.description}).`);
+  }
+
+  // Groups a stage's Matchups into "ties" to resolve: single matches stay
+  // as their own 1-entry tie, while entries sharing a tieId (two-legged
+  // ties) are grouped together, ordered by tieLeg.
+  private groupIntoTies(matchups: Matchup[]): Matchup[][] {
+    const ties: Matchup[][] = [];
+    const seenTieIds = new Set<string>();
+
+    matchups.forEach((m) => {
+      if (m.tieId) {
+        if (seenTieIds.has(m.tieId)) return;
+        seenTieIds.add(m.tieId);
+        const legs = matchups
+          .filter((x) => x.tieId === m.tieId)
+          .sort((a, b) => (a.tieLeg ?? 1) - (b.tieLeg ?? 1));
+        ties.push(legs);
+      } else {
+        ties.push([m]);
+      }
+    });
+
+    return ties;
+  }
+
+  // Resolves a single (non-two-legged) knockout match: uses the real result
+  // if one exists (including penalty-shootout winner detection via
+  // shootoutWinnersMap), otherwise simulates a win/loss/penalties outcome.
+  // This is the original single-match knockout algorithm, unchanged.
+  private resolveSingleKnockoutMatch(
+    match: Matchup,
+    matchIndex: number,
+    stageName: string,
+    knockoutMatches: Match[],
+    shootoutWinnersMap: { [matchId: number]: string },
+    simElo: { [teamId: string]: number },
+    dynamicHostTeamId: string | null
+  ): string {
+    const actualResult = knockoutMatches.find(
+      (m) =>
+        (m.homeTeamId === match.homeTeamId && m.awayTeamId === match.awayTeamId) ||
+        (m.homeTeamId === match.awayTeamId && m.awayTeamId === match.homeTeamId)
+    );
+
+    if (actualResult && actualResult.homeGoals !== null && actualResult.awayGoals !== null) {
+      if (actualResult.homeGoals > actualResult.awayGoals) {
+        return actualResult.homeTeamId;
+      }
+      if (actualResult.awayGoals > actualResult.homeGoals) {
+        return actualResult.awayTeamId;
+      }
+      return shootoutWinnersMap[actualResult.id] || (Math.random() < 0.5 ? actualResult.homeTeamId : actualResult.awayTeamId);
+    }
+
+    const location = dynamicHostTeamId ?? this.config.getKnockoutMatchLocation(stageName, matchIndex);
+    const homeAdvantage = (location === match.homeTeamId) ? 100 : 0;
+    const awayAdvantage = (location === match.awayTeamId) ? 100 : 0;
+    const homeElo = simElo[match.homeTeamId] + homeAdvantage;
+    const awayElo = simElo[match.awayTeamId] + awayAdvantage;
+
+    const isHomeFav = homeElo >= awayElo;
+    const favUnderdogDiff = Math.abs(homeElo - awayElo);
+    let marginResult = simulateResult(favUnderdogDiff);
+
+    let isDraw = marginResult === 0;
+    let shootoutWinner = '';
+    if (isDraw) {
+      marginResult = Math.round(simulateResult(favUnderdogDiff * 0.4) / 2.5);
+      isDraw = marginResult === 0;
+      if (isDraw) {
+        const we = 1 / (Math.pow(10, -favUnderdogDiff / 400) + 1);
+        const penaltyWe = 0.5 + (we - 0.5) / 4;
+        shootoutWinner = Math.random() <= penaltyWe ? (isHomeFav ? match.homeTeamId : match.awayTeamId) : (isHomeFav ? match.awayTeamId : match.homeTeamId);
+      }
+    }
+
+    let winner: string;
+    if (shootoutWinner) {
+      winner = shootoutWinner;
+    } else if (marginResult > 0) {
+      winner = isHomeFav ? match.homeTeamId : match.awayTeamId;
+    } else {
+      winner = isHomeFav ? match.awayTeamId : match.homeTeamId;
+    }
+
+    const favTeam = isHomeFav ? match.homeTeamId : match.awayTeamId;
+    const undTeam = isHomeFav ? match.awayTeamId : match.homeTeamId;
+    const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, this.config.code);
+    simElo[favTeam] += ratingChange;
+    simElo[undTeam] -= ratingChange;
+
+    return winner;
+  }
+
+  // Resolves a two-legged tie by simulating (or using real results for) each
+  // leg's actual scoreline and comparing aggregate goals, falling back to a
+  // penalty-probability coin flip on an aggregate draw. Known simplification:
+  // unlike single knockout matches, this doesn't check real subsequent-round
+  // data to resolve a real aggregate draw (extra time / shootout) — it always
+  // uses the ELO-weighted probability, since two legs' worth of real dates
+  // makes the "who appears in a later round" lookup ambiguous without an
+  // explicit tie identifier in the database.
+  private resolveTwoLeggedTie(
+    legs: Matchup[],
+    knockoutMatches: Match[],
+    simElo: { [teamId: string]: number }
+  ): string {
+    const leg1 = legs.find((l) => l.tieLeg === 1) ?? legs[0];
+    const leg2 = legs.find((l) => l.tieLeg === 2) ?? legs[1];
+
+    const teamA = leg1.homeTeamId; // hosts leg 1
+    const teamB = leg1.awayTeamId; // hosts leg 2
+
+    const leg1Score = this.resolveLegGoals(leg1.homeTeamId, leg1.awayTeamId, knockoutMatches, simElo);
+    const leg2Score = this.resolveLegGoals(leg2.homeTeamId, leg2.awayTeamId, knockoutMatches, simElo);
+
+    const aggregateA = leg1Score.homeGoals + leg2Score.awayGoals;
+    const aggregateB = leg1Score.awayGoals + leg2Score.homeGoals;
+
+    if (aggregateA > aggregateB) {
+      return teamA;
+    }
+    if (aggregateB > aggregateA) {
+      return teamB;
+    }
+
+    const ratingDiff = simElo[teamA] - simElo[teamB];
+    const isAFav = ratingDiff >= 0;
+    const we = 1 / (Math.pow(10, -Math.abs(ratingDiff) / 400) + 1);
+    const penaltyWe = 0.5 + (we - 0.5) / 4;
+    const favWon = Math.random() <= penaltyWe;
+    if (isAFav) {
+      return favWon ? teamA : teamB;
+    }
+    return favWon ? teamB : teamA;
+  }
+
+  // Resolves one leg's scoreline: the real result if it's already been
+  // played, otherwise a simulated scoreline (with the home team always
+  // getting the home-field ELO boost, since a leg is by definition played
+  // at its designated home team's ground).
+  private resolveLegGoals(
+    homeTeamId: string,
+    awayTeamId: string,
+    knockoutMatches: Match[],
+    simElo: { [teamId: string]: number }
+  ): { homeGoals: number; awayGoals: number } {
+    const actual = knockoutMatches.find(
+      (m) => m.homeTeamId === homeTeamId && m.awayTeamId === awayTeamId
+    );
+    if (actual && actual.homeGoals !== null && actual.awayGoals !== null) {
+      return { homeGoals: actual.homeGoals, awayGoals: actual.awayGoals };
+    }
+
+    const homeElo = simElo[homeTeamId] + 100;
+    const awayElo = simElo[awayTeamId];
+
+    const isHomeFav = homeElo >= awayElo;
+    const favUnderdogDiff = Math.abs(homeElo - awayElo);
+    const marginResult = simulateResult(favUnderdogDiff);
+
+    const margin = Math.abs(marginResult);
+    const lower = getLowerScore(margin);
+    const higher = margin + lower;
+
+    let homeGoals = 0;
+    let awayGoals = 0;
+    if (marginResult > 0) {
+      homeGoals = isHomeFav ? higher : lower;
+      awayGoals = isHomeFav ? lower : higher;
+    } else if (marginResult < 0) {
+      homeGoals = isHomeFav ? lower : higher;
+      awayGoals = isHomeFav ? higher : lower;
+    } else {
+      homeGoals = lower;
+      awayGoals = lower;
+    }
+
+    const favTeam = isHomeFav ? homeTeamId : awayTeamId;
+    const undTeam = isHomeFav ? awayTeamId : homeTeamId;
+    const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, this.config.code);
+    simElo[favTeam] += ratingChange;
+    simElo[undTeam] -= ratingChange;
+
+    return { homeGoals, awayGoals };
   }
 
   private findTeamInStandings(standings: GroupStandings, teamId: string): TeamStats | null {
@@ -422,7 +570,7 @@ export class SimulatorEngine {
     home.goalsFor += homeGoals;
     home.goalsAgainst += awayGoals;
     home.goalDifference += (homeGoals - awayGoals);
-    
+
     away.goalsFor += awayGoals;
     away.goalsAgainst += homeGoals;
     away.goalDifference += (awayGoals - homeGoals);

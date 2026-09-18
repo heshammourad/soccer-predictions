@@ -2,18 +2,16 @@ import React from 'react';
 import { prisma } from '../../lib/db';
 import DashboardClient from '../../components/DashboardClient';
 import { notFound } from 'next/navigation';
+import { getTournament } from '../../lib/tournaments';
 
 interface PageProps {
   params: Promise<{ code: string }>;
 }
 
-const tournamentNames: { [code: string]: string } = {
-  WC: '2026 World Cup',
-};
-
 export async function generateMetadata({ params }: PageProps) {
   const resolvedParams = await params;
-  const tourneyName = tournamentNames[resolvedParams.code.toUpperCase()] || resolvedParams.code.toUpperCase();
+  const tournament = getTournament(resolvedParams.code);
+  const tourneyName = tournament?.name || resolvedParams.code.toUpperCase();
   return {
     title: `${tourneyName} Projections & Simulations`,
     description: `Monte Carlo cup predictions, group stage probabilities, and knockout bracket calculations for ${tourneyName}.`,
@@ -25,7 +23,8 @@ export default async function Page({ params }: PageProps) {
   const activeCode = resolvedParams.code.toUpperCase();
 
   // Validate tournament code
-  if (!tournamentNames[activeCode]) {
+  const tournament = getTournament(activeCode);
+  if (!tournament) {
     return notFound();
   }
 
@@ -36,9 +35,6 @@ export default async function Page({ params }: PageProps) {
       predictions: {
         include: {
           team: true,
-        },
-        orderBy: {
-          champions: 'desc',
         },
       },
     },
@@ -59,10 +55,19 @@ export default async function Page({ params }: PageProps) {
     },
   });
 
-  // 3. Separate results and fixtures
+  // 3. Fetch this tournament's team-group assignments
+  const teamTournamentGroups = await prisma.teamTournamentGroup.findMany({
+    where: { tournament: activeCode },
+  });
+  const teamGroups: { [teamId: string]: string } = {};
+  teamTournamentGroups.forEach((tg) => {
+    teamGroups[tg.teamId] = tg.group;
+  });
+
+  // 4. Separate results and fixtures
   const results = matches.filter((m) => m.homeGoals !== null);
   const fixtures = matches.filter((m) => m.homeGoals === null);
-  const tournamentName = tournamentNames[activeCode];
+  const tournamentName = tournament.name;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200">
@@ -104,6 +109,7 @@ export default async function Page({ params }: PageProps) {
             simulationRuns={JSON.parse(JSON.stringify(simulationRuns))}
             results={JSON.parse(JSON.stringify(results))}
             fixtures={JSON.parse(JSON.stringify(fixtures))}
+            teamGroups={teamGroups}
           />
         </div>
       </div>

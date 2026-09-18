@@ -165,6 +165,13 @@ const weights: { [tournament: string]: number } = {
   EAQ: 40,
   EC: 50,
   ECA: 40,
+  // eloratings.net's own K-factor tiers (per their FAQ): World Cup=60,
+  // continental championship/intercontinental=50, WC/continental
+  // qualifiers=40, "all other tournaments"=30, friendlies=20. The Nations
+  // League isn't a qualifier or a continental championship final
+  // tournament, so it falls in the "all other tournaments" tier (matching
+  // BLC/FT/IOG/KNG/WIT below) rather than EC's 50.
+  ENA: 30,
   EQ: 40,
   F: 20,
   FBQ: 40,
