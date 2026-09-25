@@ -671,7 +671,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 {activeResults.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
                     <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
-                      <span>{m.homeTeam?.name || m.homeTeamId}</span>
+                      <span className="text-right">{m.homeTeam?.name || m.homeTeamId}</span>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={getFlagUrl(m.homeTeamId)}
@@ -719,7 +719,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 {activeFixtures.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
                     <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-medium text-slate-300">
-                      <span>{m.homeTeam?.name || m.homeTeamId}</span>
+                      <span className="text-right">{m.homeTeam?.name || m.homeTeamId}</span>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={getFlagUrl(m.homeTeamId)}
