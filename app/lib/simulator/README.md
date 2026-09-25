@@ -106,18 +106,6 @@ export class Euro2028Config implements TournamentConfig {
 
 ## How to Run Simulations
 
-### Web/Dashboard Trigger
-Instantiate the `SimulatorEngine` inside a Next.js Server Action or API route:
-```typescript
-import { SimulatorEngine } from '@/app/lib/simulator/engine';
-import { WorldCup48Config } from '@/app/lib/simulator/config/worldCup';
-
-export async function runSimulationAction() {
-  const engine = new SimulatorEngine(new WorldCup48Config(), 10000);
-  await engine.runSimulation();
-}
-```
-
 ### Script / Cron Automation Trigger
 Instantiate and execute via `tsx` scripts (e.g. at the end of database sync runs):
 ```typescript

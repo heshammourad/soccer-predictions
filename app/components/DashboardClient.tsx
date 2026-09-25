@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { triggerSimulation } from '../actions/simulate';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
 import { TOURNAMENTS, finalMilestoneIfOver, getTournament } from '../lib/tournaments';
 
@@ -101,8 +100,6 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   };
 
   const activeRun = simulationRuns.find(run => run.id === selectedRunId);
-  const [isPending, startTransition] = useTransition();
-  const [simMessage, setSimMessage] = useState('');
 
   // Pivot this run's flat Prediction rows into one row per team
   const teamRows: TeamRow[] = React.useMemo(() => {
@@ -129,19 +126,6 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   const handleTournamentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     router.push(`/tournament/${val}`);
-  };
-
-  const handleSimulate = () => {
-    setSimMessage('Simulating 10,000 tournaments on the server... this can take 10-20 seconds.');
-    startTransition(async () => {
-      const res = await triggerSimulation(activeTournament);
-      if (res.success) {
-        setSimMessage('Simulation completed! Projections updated.');
-        setTimeout(() => setSimMessage(''), 5000);
-      } else {
-        setSimMessage(`Error: ${res.error || 'Failed to simulate'}`);
-      }
-    });
   };
 
   // Extract unique group letters
@@ -405,7 +389,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
 
   return (
     <div className="space-y-8">
-      {/* Simulation Controls & Notification */}
+      {/* Simulation Summary */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-slate-900/40 border border-slate-800 rounded-2xl backdrop-blur-xl gap-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-100">Monte Carlo Projections</h2>
@@ -414,38 +398,8 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               ? `Based on 10,000 simulation runs. Last updated: ${new Date(
                   teamRows[0].updatedAt
                 ).toLocaleString()}`
-              : 'No simulation data found in database. Please run the simulation.'}
+              : 'No simulation data found in database yet.'}
           </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          {simMessage && (
-            <span className="text-sm text-amber-400 bg-amber-400/10 border border-amber-400/20 px-4 py-2 rounded-xl text-center">
-              {simMessage}
-            </span>
-          )}
-          {!completedRun && (
-            <button
-              onClick={handleSimulate}
-              disabled={isPending}
-              className={`px-6 py-3 font-semibold text-white rounded-xl shadow-lg transition duration-200 text-center ${
-                isPending
-                  ? 'bg-indigo-700/60 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20 hover:scale-[1.02]'
-              }`}
-            >
-              {isPending ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Simulating...
-                </span>
-              ) : (
-                'Run 10,000 Simulations'
-              )}
-            </button>
-          )}
         </div>
       </div>
 
