@@ -20,7 +20,7 @@ pnpm exec tsx scripts/fetch-confederations.ts   # rebuild app/lib/simulator/conf
 pnpm test                         # vitest run — covers app/lib/simulator/ (engine, math, config)
 ```
 
-The Vitest suite only covers `app/lib/simulator/`. It characterizes simulation logic (group sorting, two-legged ties, dynamic hosts, rating math) but doesn't touch the DB, scraping, or UI — verify those changes by running `scripts/sync.ts` (or the Server Action) and inspecting the written `Prediction` rows.
+The Vitest suite only covers `app/lib/simulator/`. It characterizes simulation logic (group sorting, two-legged ties, dynamic hosts, rating math) but doesn't touch the DB, scraping, or UI — verify those changes by running `scripts/sync.ts` and inspecting the written `Prediction` rows.
 
 `DATABASE_URL` (Postgres connection string) must be set — via `.env` (loaded by `dotenv` in scripts and `prisma.config.ts`) locally, and the `DATABASE_URL` GitHub secret in CI. `app/lib/db.ts` returns a non-null `prisma`/`pool` even when the env var is missing, so a missing URL surfaces as a runtime error on first query.
 
@@ -57,8 +57,8 @@ Two generators: `prisma-client` → `app/generated/prisma` (gitignored, the one 
 
 - `app/layout.tsx` → `Sidebar` + content. `app/page.tsx` = ELO rankings table (`RankingsClient`). `app/tournament/[code]/page.tsx` = projections dashboard (`DashboardClient`); only `WC` is a valid code (`tournamentNames` map, else `notFound()`).
 - Server components pass Prisma data to client components via `JSON.parse(JSON.stringify(...))` to strip non-serializable values.
-- `DashboardClient` lets the user pick a `SimulationRun` (milestone); `MILESTONE_DATES` there must stay aligned with the milestone list in `scripts/sync.ts` and the `asOfDate` cutoffs. Once every dated milestone in a tournament's `milestoneDates` has passed and its last one has been simulated (`finalMilestoneIfOver` in `app/lib/tournaments.ts`), the dashboard hides `Current Projections` and the simulate button and defaults to that final run — so a tournament's final milestone must be listed there.
-- `app/actions/simulate.ts` — `triggerSimulation` Server Action runs a single live `Current Projections` simulation from the UI button.
+- `DashboardClient` lets the user pick a `SimulationRun` (milestone); `MILESTONE_DATES` there must stay aligned with the milestone list in `scripts/sync.ts` and the `asOfDate` cutoffs. Once every dated milestone in a tournament's `milestoneDates` has passed and its last one has been simulated (`finalMilestoneIfOver` in `app/lib/tournaments.ts`), the dashboard hides `Current Projections` and defaults to that final run — so a tournament's final milestone must be listed there.
+- The UI is read-only: simulations only run from `scripts/sync.ts`. There used to be a "Run 10,000 Simulations" button (`triggerSimulation` Server Action), but it was removed because anyone could spam it on a public app. Don't reintroduce an unauthenticated mutating action.
 - Flags: `getFlagUrl` in `config/confederations.ts` maps eloratings.net 2-letter codes to `flagcdn.com` codes (many non-ISO special cases).
 - Styling: Tailwind v4 (`@tailwindcss/postcss`), dark slate palette throughout.
 
@@ -69,5 +69,5 @@ One-shot bootstrap for an empty database: reads the TSV/CSV snapshots under `pri
 ## Conventions
 
 - Team/tournament codes are eloratings.net's (2-letter team codes like `QA`, `CI`; tournament codes like `WC`, `EC`, `AC`).
-- To add a tournament: seed `Team`/`Match` rows, add a `TournamentConfig` in `config/`, wire it into `app/actions/simulate.ts` and `scripts/sync.ts`, add it to `tournamentNames` maps.
+- To add a tournament: seed `Team`/`Match` rows, add a `TournamentConfig` in `config/`, wire it into `scripts/sync.ts`, add it to `tournamentNames` maps.
 - ESLint uses the flat config (`eslint.config.mjs`); `scripts/` is outside the TS project.
