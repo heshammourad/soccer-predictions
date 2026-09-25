@@ -21,6 +21,8 @@ pnpm exec tsx scripts/backfill-certainty.ts     # recompute Prediction.certainty
 pnpm test                         # vitest run — covers app/lib/simulator/ (engine, math, config)
 ```
 
+CI (`.github/workflows/ci.yml`) runs build, type check, lint and tests on every PR and push to `master`, with no database: every page queries at request time (`/` is `force-dynamic`, since ratings change with each daily sync, which doesn't redeploy). Keep it that way; a page prerendered from the DB would break the CI build.
+
 The Vitest suite only covers `app/lib/simulator/`. It characterizes simulation logic (group sorting, two-legged ties, dynamic hosts, rating math) but doesn't touch the DB, scraping, or UI — verify those changes by running `scripts/sync.ts` and inspecting the written `Prediction` rows.
 
 `DATABASE_URL` (Postgres connection string) must be set — via `.env` (loaded by `dotenv` in scripts and `prisma.config.ts`) locally, and the `DATABASE_URL` GitHub secret in CI. `app/lib/db.ts` returns a non-null `prisma`/`pool` even when the env var is missing, so a missing URL surfaces as a runtime error on first query.

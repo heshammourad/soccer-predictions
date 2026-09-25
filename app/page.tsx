@@ -7,6 +7,10 @@ export const metadata = {
   description: 'Real-time global national team ELO ratings, ranking positions, confederation filters, and 1-year performance deltas.',
 };
 
+// Rendered per request: ratings change with every daily sync, which doesn't
+// redeploy, so a page prerendered at build time would go stale.
+export const dynamic = 'force-dynamic';
+
 export default async function Page() {
   // Query only confederation-affiliated teams ordered by current ELO descending
   const teams = await prisma.team.findMany({
