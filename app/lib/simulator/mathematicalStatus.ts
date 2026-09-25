@@ -484,6 +484,8 @@ export function calculateMathematicalStatus(
   };
 }
 
+const DEFAULT_MAX_REMAINING_PER_GROUP = 6;
+
 export interface GroupTop2Options {
   // Teams already through regardless of results (e.g. tournament hosts in a
   // qualifying group). Each takes one of a group's two places: it is always
@@ -492,8 +494,9 @@ export interface GroupTop2Options {
   // non-automatic teams and to the reduced number of places.
   automaticQualifiers?: string[];
   // Skip (report nothing as decided for) any group with more unplayed
-  // matches than this. The enumeration below is 6^k per group, which is too
-  // slow to run in the browser for a double round-robin early on.
+  // matches than this (default 6). The enumeration below is 6^k per group and
+  // runs in the browser, so a double round-robin group of 4 with 10+ matches
+  // left would freeze the page.
   maxRemainingPerGroup?: number;
   // Tiebreak order used to rank a group (default head-to-head first).
   sortRules?: SortRules;
@@ -572,8 +575,7 @@ export function calculateGroupTop2Status(
     // Places open to the group's non-automatic teams.
     const slots = 2 - groupTeamsList.filter(id => automatic.has(id)).length;
 
-    const tooManyRemaining =
-      options.maxRemainingPerGroup !== undefined && groupUnplayedMatches.length > options.maxRemainingPerGroup;
+    const tooManyRemaining = groupUnplayedMatches.length > (options.maxRemainingPerGroup ?? DEFAULT_MAX_REMAINING_PER_GROUP);
     if (groupPlayedMatches.length === 0 || tooManyRemaining) {
       // Nothing decided yet: anyone could finish 1st or 2nd, no one is guaranteed.
       groupTeamsList.forEach(id => {

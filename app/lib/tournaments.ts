@@ -65,10 +65,8 @@ const winGroupOnlyStatus =
   });
 const calculateWinGroupOnlyStatus = winGroupOnlyStatus();
 
-// Concacaf Nations League groups are ranked on the overall record first, and
-// the status enumeration is 6^k per group, so it's skipped until at most six
-// matches of a group remain (League A groups have twelve).
-const CNL_STATUS_OPTIONS: GroupTop2Options = { sortRules: 'overallFirst', maxRemainingPerGroup: 6 };
+// Concacaf Nations League groups are ranked on the overall record first.
+const CNL_STATUS_OPTIONS: GroupTop2Options = { sortRules: 'overallFirst' };
 
 // League A: the top two of each group reach the quarter-finals, where the four
 // seeds (who play no group match) are already waiting, so they are guaranteed.
@@ -97,13 +95,10 @@ const NATIONS_LEAGUE_MILESTONE_DATES: TournamentDescriptor['milestoneDates'] = {
 };
 
 // The AFCON qualifiers' only outcome is qualifying, which the dashboard reads
-// from the group-phase milestone's status sets. The status enumeration is 6^k
-// per group, so it is skipped until at most 6 matches of a group remain
-// (i.e. from the third matchday onward).
+// from the group-phase milestone's status sets.
 const calculateAfconQualifierStatus: TournamentDescriptor['calculateMathStatus'] = (teams, results, fixtures) => {
   const status = calculateGroupTop2Status(teams, results, fixtures, {
     automaticQualifiers: AFCON_HOSTS,
-    maxRemainingPerGroup: 6,
   });
   return {
     ...status,

@@ -64,6 +64,15 @@ describe('calculateGroupTop2Status with an automatic qualifier', () => {
     expect(status.eliminatedWinGroup.size).toBe(0);
   });
 
+  it('skips a group with more than 6 matches left by default', () => {
+    // 10 left in a double round-robin of 4 is 6^10 scenarios: without the
+    // default cap this would hang.
+    const { results, fixtures } = split(2);
+    const status = calculateGroupTop2Status(teams, results, fixtures);
+    expect(status.guaranteedProgress.size).toBe(0);
+    expect(status.eliminatedWinGroup.size).toBe(0);
+  });
+
   it('counts both meetings of a pair in the head-to-head tiebreak', () => {
     // A and B win every other game, so finish level on 15 points whatever
     // happens between C and D. A won 1-0 at home and B 2-0 at home: only the
