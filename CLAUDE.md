@@ -11,8 +11,6 @@ Next.js 16 (App Router) app that publishes world football ELO rankings and Monte
 Package manager is **pnpm** (`pnpm-lock.yaml`, workspace with `.` and `nodejs`). `npm`/`package-lock.json` are not authoritative — `package-lock.json` is untracked.
 
 ```bash
-pnpm install                      # install
-pnpm dev                          # next dev (localhost:3000)
 pnpm build                        # prisma generate && next build
 pnpm lint                         # eslint (next core-web-vitals + typescript rules)
 pnpm prisma generate              # regenerate Prisma client after schema.prisma changes
