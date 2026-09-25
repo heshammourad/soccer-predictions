@@ -31,6 +31,13 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm prisma generate
 
+      # Backstop for migrate.yml: the sync writes with the current schema, so
+      # make sure every migration on master is applied first.
+      - name: Apply pending migrations
+        run: pnpm prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       # node-tls-client@2.1.0 (unmaintained) downloads its native library from the
       # bogdanfinn/tls-client "latest" release at runtime. v1.16.0 (2026-09-02) renamed
       # every asset (tls-client-linux-ubuntu-amd64-<v>.so -> tls-client-xgo-<v>-linux-amd64.so),
