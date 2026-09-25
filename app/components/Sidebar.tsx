@@ -3,13 +3,20 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TOURNAMENTS } from '../lib/tournaments';
+import { TOURNAMENTS, finalMilestoneIfOver } from '../lib/tournaments';
+import { withBasePath } from '../lib/basePath';
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
   const isActive = (path: string) => pathname === path;
+
+  const completed = TOURNAMENTS.filter((t) => finalMilestoneIfOver(t) !== null);
+  const tournamentSections = [
+    { title: 'Current Tournaments', tournaments: TOURNAMENTS.filter((t) => !completed.includes(t)) },
+    { title: 'Completed Tournaments', tournaments: completed },
+  ];
 
   return (
     <>
@@ -66,31 +73,40 @@ export default function Sidebar() {
               </Link>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3">
-                Tournaments
-              </h3>
-              <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1">
-                {TOURNAMENTS.map((t) => {
-                  const path = `/tournament/${t.code}`;
-                  return (
-                    <Link
-                      key={t.code}
-                      href={path}
-                      onClick={() => setIsOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${
-                        isActive(path)
-                          ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                      }`}
-                    >
-                      <span className="text-xs">⚡</span>
-                      <span className="truncate">{t.name}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
+            {tournamentSections.map(
+              (section) =>
+                section.tournaments.length > 0 && (
+                  <div key={section.title} className="space-y-2">
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3">
+                      {section.title}
+                    </h3>
+                    <div className="space-y-1">
+                      {section.tournaments.map((t) => {
+                        const path = `/tournament/${t.code}`;
+                        return (
+                          <Link
+                            key={t.code}
+                            href={path}
+                            onClick={() => setIsOpen(false)}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition ${
+                              isActive(path)
+                                ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                            }`}
+                          >
+                            {/* Light tile so dark logos (e.g. the World Cup's black "26") stay visible */}
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 p-0.5">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={withBasePath(t.logo)} alt="" className="h-full w-full object-contain" />
+                            </span>
+                            <span className="leading-snug">{t.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ),
+            )}
           </nav>
         </div>
 

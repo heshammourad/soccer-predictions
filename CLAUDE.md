@@ -55,7 +55,7 @@ Two generators: `prisma-client` → `app/generated/prisma` (gitignored, the one 
 
 ### Frontend
 
-- Served publicly at `www.heshammourad.com/soccer-predictions` through `heshammourad/heshammourad-portal`'s proxy (no login). `next.config.ts` takes `basePath` from `NEXT_PUBLIC_SUBPATH_PREFIX` (set on the Vercel project and inlined at build time, so changing it needs a redeploy; unset locally) and points the production `assetPrefix` at `soccer-predictions-sand.vercel.app` so static assets skip the portal. Use `<Link>`/`router` for internal URLs: they add the basePath automatically. A hardcoded root-relative `fetch`/`<img>` path won't get it. Any Server Action added later would also need the portal origin in `experimental.serverActions.allowedOrigins`.
+- Served publicly at `www.heshammourad.com/soccer-predictions` through `heshammourad/heshammourad-portal`'s proxy (no login). `next.config.ts` takes `basePath` from `NEXT_PUBLIC_SUBPATH_PREFIX` (set on the Vercel project and inlined at build time, so changing it needs a redeploy; unset locally) and points the production `assetPrefix` at `soccer-predictions-sand.vercel.app` so static assets skip the portal. Use `<Link>`/`router` for internal URLs: they add the basePath automatically. A hardcoded root-relative `fetch`/`<img>` path won't get it; prefix it with `withBasePath` from `app/lib/basePath.ts`. Any Server Action added later would also need the portal origin in `experimental.serverActions.allowedOrigins`.
 - `app/layout.tsx` → `Sidebar` + content. `app/page.tsx` = ELO rankings table (`RankingsClient`). `app/tournament/[code]/page.tsx` = projections dashboard (`DashboardClient`); only `WC` is a valid code (`tournamentNames` map, else `notFound()`).
 - Server components pass Prisma data to client components via `JSON.parse(JSON.stringify(...))` to strip non-serializable values.
 - `DashboardClient` lets the user pick a `SimulationRun` (milestone); `MILESTONE_DATES` there must stay aligned with the milestone list in `scripts/sync.ts` and the `asOfDate` cutoffs. Once every dated milestone in a tournament's `milestoneDates` has passed and its last one has been simulated (`finalMilestoneIfOver` in `app/lib/tournaments.ts`), the dashboard hides `Current Projections` and defaults to that final run — so a tournament's final milestone must be listed there.
@@ -70,5 +70,5 @@ One-shot bootstrap for an empty database: reads the TSV/CSV snapshots under `pri
 ## Conventions
 
 - Team/tournament codes are eloratings.net's (2-letter team codes like `QA`, `CI`; tournament codes like `WC`, `EC`, `AC`).
-- To add a tournament: seed `Team`/`Match` rows, add a `TournamentConfig` in `config/`, wire it into `scripts/sync.ts`, add it to `tournamentNames` maps.
+- To add a tournament: seed `Team`/`Match` rows, add a `TournamentConfig` in `config/`, wire it into `scripts/sync.ts`, add it to `tournamentNames` maps, and give its `TOURNAMENTS` entry a `logo` under `public/tournaments/` (qualifiers reuse the main tournament's logo).
 - ESLint uses the flat config (`eslint.config.mjs`); `scripts/` is outside the TS project.
