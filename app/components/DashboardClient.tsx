@@ -17,6 +17,8 @@ interface Prediction {
   tournament: string;
   milestone: string;
   probability: number;
+  // Proven from the real results as of the run's cutoff; null while open.
+  certainty: 'CERTAIN' | 'IMPOSSIBLE' | null;
   eloAtSimulation: number;
   updatedAt: Date;
   team: Team;
@@ -61,6 +63,7 @@ interface TeamRow {
   eloAtSimulation: number;
   updatedAt: Date;
   values: { [milestone: string]: number };
+  certainty: { [milestone: string]: 'CERTAIN' | 'IMPOSSIBLE' | null };
 }
 
 type SortColumn = string; // 'team' | 'group' | 'elo' | a milestone name
@@ -115,10 +118,12 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
           eloAtSimulation: p.eloAtSimulation,
           updatedAt: p.updatedAt,
           values: {},
+          certainty: {},
         };
         rowsByTeam.set(p.teamId, row);
       }
       row.values[p.milestone] = p.probability;
+      row.certainty[p.milestone] = p.certainty ?? null;
     });
     return Array.from(rowsByTeam.values());
   }, [activeRun, teamGroups]);
@@ -161,87 +166,17 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   // since it doesn't depend on this tournament's specific milestone names.
   const isGroupStage = activeFixtures.some(f => !f.isKnockout);
 
-  const knockoutStages = tournament.knockoutStages;
+  const certaintyByTeam: { [teamId: string]: TeamRow['certainty'] } = {};
+  teamRows.forEach((r) => (certaintyByTeam[r.teamId] = r.certainty));
 
-  const getTargetStageKey = () => {
-    // Find the earliest knockout stage that's still undecided (fractional)
-    // for at least one team in this run — that's the "current" stage.
-    for (const stage of knockoutStages) {
-      const hasFractional = teamRows.some((r) => {
-        const val = r.values[stage];
-        return val !== undefined && val > 0 && val < 1;
-      });
-      if (hasFractional) {
-        return stage;
-      }
-    }
-    return knockoutStages[knockoutStages.length - 1];
-  };
+  const sortMilestones = tournament.defaultSortMilestones ?? [...tournament.milestones].reverse();
+  const championsMilestone = sortMilestones[0];
 
-  const simpleTeams = React.useMemo(() => {
-    return teamRows.map((r) => ({
-      id: r.teamId,
-      name: r.team.name,
-      group: r.group,
-    }));
-  }, [teamRows]);
-
-  const mathStatus = React.useMemo(() => {
-    if (teamRows.length === 0) {
-      return {
-        guaranteedProgress: new Set<string>(),
-        mathematicallyEliminated: new Set<string>(),
-        guaranteedWinGroup: new Set<string>(),
-        eliminatedWinGroup: new Set<string>(),
-      };
-    }
-
-    if (isGroupStage) {
-      return tournament.calculateMathStatus(
-        simpleTeams,
-        activeResults.map(m => ({
-          homeTeamId: m.homeTeamId,
-          awayTeamId: m.awayTeamId,
-          homeGoals: m.homeGoals,
-          awayGoals: m.awayGoals,
-          isKnockout: m.isKnockout,
-        })),
-        activeFixtures.map(m => ({
-          homeTeamId: m.homeTeamId,
-          awayTeamId: m.awayTeamId,
-          homeGoals: m.homeGoals,
-          awayGoals: m.awayGoals,
-          isKnockout: m.isKnockout,
-        }))
-      );
-    } else {
-      const targetStageKey = getTargetStageKey();
-      const guaranteedProgress = new Set<string>();
-      const mathematicallyEliminated = new Set<string>();
-
-      teamRows.forEach((r) => {
-        const val = r.values[targetStageKey];
-        if (val === 1.0) {
-          guaranteedProgress.add(r.teamId);
-        } else if (val === 0.0) {
-          mathematicallyEliminated.add(r.teamId);
-        }
-      });
-
-      return {
-        guaranteedProgress,
-        mathematicallyEliminated,
-        guaranteedWinGroup: new Set<string>(),
-        eliminatedWinGroup: new Set<string>(),
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamRows, isGroupStage, activeResults, activeFixtures, activeRunDescription, simpleTeams, tournament]);
-
+  // A team whose headline outcome (e.g. the title) is proven out of reach.
   const isEliminatedMap: { [teamId: string]: boolean } = {};
   teamRows.forEach((r) => {
     isEliminatedMap[r.teamId] =
-      tournament.dimEliminatedTeams !== false && mathStatus.mathematicallyEliminated.has(r.teamId);
+      tournament.dimEliminatedTeams !== false && r.certainty[championsMilestone] === 'IMPOSSIBLE';
   });
 
   // Points (3 / 1 / 0) and games played from this run's completed group-phase
@@ -261,40 +196,13 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     }
   });
 
+  // 100% and "—" are kept for outcomes proven from the real results; a
+  // simulated 1 or 0 that isn't proven shows as >99% or <1%, since it only
+  // means nothing else came up in the simulation.
   const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) => {
-    let isGuaranteed = false;
-    let isEliminated = false;
-
-    if (tournament.groupPhaseMilestone && col === tournament.groupPhaseMilestone) {
-      if (isGroupStage) {
-        isGuaranteed = mathStatus.guaranteedWinGroup.has(teamId);
-        isEliminated = mathStatus.eliminatedWinGroup.has(teamId);
-      } else {
-        isGuaranteed = val === 1.0;
-        isEliminated = val === 0.0;
-      }
-    } else if (knockoutStages.includes(col)) {
-      const targetStageKey = getTargetStageKey();
-      const targetIndex = knockoutStages.indexOf(targetStageKey);
-      const colIndex = knockoutStages.indexOf(col);
-
-      if (colIndex >= targetIndex) {
-        isEliminated = mathStatus.mathematicallyEliminated.has(teamId);
-        if (colIndex === targetIndex) {
-          isGuaranteed = mathStatus.guaranteedProgress.has(teamId);
-        }
-      } else {
-        isGuaranteed = val > 0.5;
-        isEliminated = val <= 0.5;
-      }
-    }
-
-    if (isEliminated) return 0.0;
-    if (isGuaranteed) return 1.0;
-
-    if (val === 0.0) return 0.0001;
-    if (val === 1.0) return 0.9999;
-
+    const certainty = certaintyByTeam[teamId]?.[col];
+    if (certainty === 'IMPOSSIBLE') return 0.0;
+    if (certainty === 'CERTAIN') return 1.0;
     return Math.max(0.0001, Math.min(0.9999, val));
   };
 
@@ -306,9 +214,6 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     if (eff >= 0.995) return '>99%';
     return `${Math.round(eff * 100)}%`;
   };
-
-  const sortMilestones = tournament.defaultSortMilestones ?? [...tournament.milestones].reverse();
-  const championsMilestone = sortMilestones[0];
 
   // Sort predictions based on whether it is group stage or knockout stage
   const sortedRows = React.useMemo(() => {
@@ -350,7 +255,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
       return b.team.currentElo - a.team.currentElo;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredRows, sortColumn, sortDir, isGroupStage, mathStatus, tournament]);
+  }, [filteredRows, sortColumn, sortDir, isGroupStage, tournament]);
 
   // Helper to calculate cell background style: a white-to-colour gradient
   // overlay, green for outcomes worth having and red for negative ones

@@ -1,6 +1,7 @@
 import { TournamentConfig, GroupStandings, Matchup, TeamStats, Match, League, PlayoffOutcome } from '../types';
 import { rankAcrossGroups } from './base';
 import { NationsLeagueAConfig } from './nationsLeagueA';
+import { Condition } from '../certainty';
 
 // 2026-27 UEFA Nations League, Leagues A-C simulated together in one Monte
 // Carlo pass (League D isn't modelled: next edition has three leagues, so D
@@ -23,21 +24,62 @@ import { NationsLeagueAConfig } from './nationsLeagueA';
 // Simplifications: draw conditions are ignored, and the cross-group ranking
 // tiebreak after points/GD/GF is random rather than the full art. 19.02
 // criteria.
+const A_GROUPS = ['A1', 'A2', 'A3', 'A4'];
+
+// League A's two lowest-ranked 4th-placed teams go straight down.
+const A_AUTO_RELEGATED: Condition = { acrossGroups: { position: 4, groups: A_GROUPS, worst: 2 } };
+// The runner-up (B, C) or 4th-placed team (B) that plays the playoff against
+// the league above (runner-up) or below (4th) and wins or loses it.
+const playoff = (position: number, result: 'won' | 'lost'): Condition => ({
+  all: [{ position: [position, position] }, { playoff: result }],
+});
+
 const LEAGUES: League[] = [
   {
     code: 'ENA',
-    groups: ['A1', 'A2', 'A3', 'A4'],
+    groups: A_GROUPS,
     milestones: ['winGroup', 'quarterfinals', 'semifinals', 'final', 'champions', 'autoRelegated', 'relegated'],
+    certainty: {
+      ...new NationsLeagueAConfig().certainty,
+      autoRelegated: A_AUTO_RELEGATED,
+      // Auto-relegated, or in the A/B playoff (the two lowest-ranked
+      // 3rd-placed and two highest-ranked 4th-placed teams) and lost it.
+      relegated: {
+        any: [
+          A_AUTO_RELEGATED,
+          {
+            all: [
+              {
+                any: [
+                  { acrossGroups: { position: 3, groups: A_GROUPS, worst: 2 } },
+                  { acrossGroups: { position: 4, groups: A_GROUPS, best: 2 } },
+                ],
+              },
+              { playoff: 'lost' },
+            ],
+          },
+        ],
+      },
+    },
   },
   {
     code: 'ENB',
     groups: ['B1', 'B2', 'B3', 'B4'],
     milestones: ['autoPromoted', 'promoted', 'relegated'],
+    certainty: {
+      autoPromoted: { position: [1, 1] },
+      promoted: { any: [{ position: [1, 1] }, playoff(2, 'won')] },
+      relegated: playoff(4, 'lost'),
+    },
   },
   {
     code: 'ENC',
     groups: ['C1', 'C2', 'C3', 'C4'],
     milestones: ['autoPromoted', 'promoted'],
+    certainty: {
+      autoPromoted: { position: [1, 1] },
+      promoted: { any: [{ position: [1, 1] }, playoff(2, 'won')] },
+    },
   },
 ];
 
@@ -78,6 +120,9 @@ export class NationsLeagueConfig implements TournamentConfig {
     // Ireland v Israel is played at a neutral venue.
     return !(homeTeamId === 'IE' && awayTeamId === 'IL');
   }
+
+  groupRules = this.leagueA.groupRules;
+  twoLeggedStages = this.leagueA.twoLeggedStages;
 
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
     return this.leagueA.sortGroupStandings(teams, matches);

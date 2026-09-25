@@ -1,4 +1,4 @@
-import { DoubleRoundRobinOptions } from './base';
+import { GroupRules } from './base';
 
 // 2026/27 UEFA Nations League access list, positions 1-48 (Leagues A-C;
 // League D isn't modelled): each team's rank from the previous edition (the
@@ -25,6 +25,7 @@ export function accessListPosition(teamId: string): number {
 // overall GD, goals scored, away goals scored, wins, away wins; then the
 // access list. Disciplinary points (between away wins and the access list)
 // aren't tracked, so they're skipped.
-export const UEFA_NATIONS_LEAGUE_TIEBREAKERS: DoubleRoundRobinOptions = {
+export const UEFA_NATIONS_LEAGUE_TIEBREAKERS: GroupRules = {
+  order: 'headToHeadFirst',
   overall: ['awayGoals', 'wins', 'awayWins', (teamId) => -accessListPosition(teamId)],
 };

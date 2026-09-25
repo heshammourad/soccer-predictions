@@ -1,6 +1,7 @@
 import { TournamentConfig, GroupStandings, Matchup, TeamStats, Match } from '../types';
-import { sortGroupTeamsWithH2H, compareStats } from './base';
+import { sortGroup, compareStats, FIFA_TIEBREAKERS } from './base';
 import { matchupIndices } from './worldCupMatchupScenarios';
+import { CertaintyRules } from '../certainty';
 
 export class WorldCup48Config implements TournamentConfig {
   code = 'WC';
@@ -27,24 +28,19 @@ export class WorldCup48Config implements TournamentConfig {
     return this.locationsWC[globalIndex % this.locationsWC.length];
   }
 
+  groupRules = FIFA_TIEBREAKERS;
+
+  // The top two of each group and the best eight third-placed teams reach
+  // the round of 32.
+  certainty: CertaintyRules = {
+    winGroup: { position: [1, 1] },
+    roundOf32: {
+      any: [{ position: [1, 2] }, { acrossGroups: { position: 3, groups: this.groups, best: 8 } }],
+    },
+  };
+
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    const getMatchResult = (teamA: string, teamB: string) => {
-      const match = matches.find(
-        (m) =>
-          ((m.homeTeamId === teamA && m.awayTeamId === teamB) ||
-            (m.homeTeamId === teamB && m.awayTeamId === teamA))
-      );
-      if (match && match.homeGoals !== null && match.awayGoals !== null) {
-        return {
-          team1: match.homeTeamId,
-          team2: match.awayTeamId,
-          score1: match.homeGoals,
-          score2: match.awayGoals,
-        };
-      }
-      return null;
-    };
-    return sortGroupTeamsWithH2H(teams, getMatchResult);
+    return sortGroup(teams, matches, this.groupRules);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {

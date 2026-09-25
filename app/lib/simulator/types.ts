@@ -31,6 +31,8 @@ export interface Match {
   isKnockout: boolean;
   location: string | null;
   ratingChange: number;
+  // Shoot-out winner of a knockout match level after extra time, if recorded.
+  winnerOverride?: string | null;
 }
 
 export interface Matchup {
@@ -52,6 +54,9 @@ export interface KnockoutStage {
   teamsCount: number;
 }
 
+import type { GroupRules } from './ranking';
+import type { CertaintyRules } from './certainty';
+
 export interface TournamentConfig {
   code: string;
   name: string;
@@ -71,6 +76,18 @@ export interface TournamentConfig {
 
   // Custom sorting function for group standings
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[];
+
+  // Optional: the group tiebreakers as data (what sortGroupStandings applies),
+  // and when each milestone is achieved, so the certainty calculation
+  // (certainty.ts) can prove a milestone certain or impossible. Both are
+  // needed; without them no certainty is recorded. A multi-league config
+  // puts `certainty` on each League instead.
+  groupRules?: GroupRules;
+  certainty?: CertaintyRules;
+
+  // Optional: knockout stages played over two legs (default: single matches),
+  // so the certainty calculation knows when a real tie is over.
+  twoLeggedStages?: string[];
 
   // Determine initial matches of the knockout phase. knownKnockoutFixtures
   // are already-scheduled/played knockout Match rows for this tournament
@@ -157,6 +174,7 @@ export interface League {
   code: string;
   groups: string[];
   milestones: string[];
+  certainty?: CertaintyRules;
 }
 
 export interface PlayoffOutcome {

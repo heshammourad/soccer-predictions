@@ -9,8 +9,10 @@ This directory houses the TypeScript tournament simulation framework. It utilize
 * `types.ts`: Core type definitions for standings, match statistics, and the tournament config contract.
 * `engine.ts`: Generic Monte Carlo simulation engine. Loads data, simulates unplayed group and knockout matches, and writes outcomes to Neon DB.
 * `math.ts`: Core probability equations. Generates score margins, calculates rating updates, and manages ELO formulas.
+* `ranking.ts`: Group ranking from tiebreaker rules given as data (`GroupRules`). Stats are ranges, so it can also rank a scenario where only match outcomes are known.
+* `certainty.ts`: Proves milestones `CERTAIN` or `IMPOSSIBLE` from real results (no simulation); stored as `Prediction.certainty`. See "Certainty" below.
 * `config/`: Configuration adapters for individual tournaments.
-  * `base.ts`: Standard tiebreakers and Head-to-Head (H2H) group sorting.
+  * `base.ts`: Group sorting (`sortGroup`), the FIFA/CAF/Concacaf tiebreaker rule sets, and cross-group ranking.
   * `worldCup.ts`: 2026 World Cup adapter (12 groups, best 8 third-place qualifiers, 32-team knockout bracket).
   * `worldCupMatchupScenarios.ts`: Matrix index lookup for matching World Cup third-place teams.
   * `nationsLeagueA.ts`: 2026-27 UEFA Nations League A adapter (4 double round-robin groups, two-legged quarterfinals, Finals with a dynamically chosen host).
@@ -36,7 +38,17 @@ When outcomes in one tournament depend on another's (Nations League promotion/re
 * `twoLeggedAwayGoals`: a two-legged tie level on aggregate is decided by away goals before the shoot-out (`ties.ts`).
 * `orderStageWinners`: orders a round's winners before they are paired for the next round, for formats that seed the next round by results (each result carries both teams' records over the two legs) rather than bracket position. It must return the same winners, reordered.
 
-Group sorting helpers live in `config/base.ts`: `sortGroupTeamsWithH2H` / `sortDoubleRoundRobinGroup` (head-to-head first: FIFA, UEFA, CAF), `sortOverallThenH2H` (overall record first: Concacaf Nations League) and `rankAcrossGroups` (compare same-position teams across groups). Its `code` is `'EN'`, which is not a database tournament code; results land under `ENA`/`ENB`/`ENC`.
+Group sorting lives in `config/base.ts`: `sortGroup(teams, matches, rules)` with a `GroupRules` value (`FIFA_TIEBREAKERS`, `CAF_TIEBREAKERS`, `CONCACAF_NATIONS_LEAGUE_TIEBREAKERS`, or UEFA's in `nationsLeagueTiebreakers.ts`), and `rankAcrossGroups` (compare same-position teams across groups). `NationsLeagueConfig`'s `code` is `'EN'`, which is not a database tournament code; results land under `ENA`/`ENB`/`ENC`.
+
+---
+
+## Certainty
+
+A simulated probability of exactly 0 or 1 only means nothing else came up in 10,000 runs. `certainty.ts` proves a milestone certain or impossible from the real results as of the run's cutoff, and the dashboard shows 100% / "—" only then.
+
+* **Group phase**: every remaining group match is tried as a home win, draw or away win (3^k scenarios per group) and ranked with `ranking.ts`, leaving scores open: a win adds 1 or more to goal difference with no upper limit. Where a tiebreaker could fall either way the teams' order stays open, so a lead that only goal difference protects is never certain. A milestone is `CERTAIN` if its condition holds in every scenario, `IMPOSSIBLE` if it fails in every one.
+* **Knockout phase**: only finished real ties count. A two-legged tie (`twoLeggedStages`) is decided only once both legs are played. The winner has certainly reached the next stage, the loser can't reach any later one. Shoot-out winners come from `Match.winnerOverride` or from who plays on.
+* **Rules**: a config sets `groupRules` (the tiebreakers `sortGroupStandings` applies) and `certainty`, a `Condition` per milestone (per `League` for a multi-league config): a group `position` range, `top` N places with `automatic` qualifiers, `acrossGroups` (best/worst N of the teams finishing a position), `team`, a cross-league `playoff` result, combined with `any`/`all`. Rules cover the group-phase milestones and the first knockout stage; later knockout stages are derived. The engine warns when a proven milestone's simulated probability disagrees, which points at a rule that doesn't match the format.
 
 ---
 
@@ -52,7 +64,8 @@ Create a new file in `app/lib/simulator/config/` (e.g., `euro2028.ts`) that impl
 
 ```typescript
 import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match } from '../types';
-import { sortGroupTeamsStandard, sortGroupTeamsWithH2H } from './base';
+import { CertaintyRules } from '../certainty';
+import { sortGroup, FIFA_TIEBREAKERS } from './base';
 
 export class Euro2028Config implements TournamentConfig {
   code = 'EC28';
@@ -65,26 +78,17 @@ export class Euro2028Config implements TournamentConfig {
     return 'DE'; // Host ELO boost mappings if applicable
   }
 
+  groupRules = FIFA_TIEBREAKERS;
+
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    const getMatchResult = (teamA: string, teamB: string) => {
-      const match = matches.find(
-        (m) =>
-          ((m.homeTeamId === teamA && m.awayTeamId === teamB) ||
-            (m.homeTeamId === teamB && m.awayTeamId === teamA))
-      );
-      if (match && match.homeGoals !== null && match.awayGoals !== null) {
-        return {
-          team1: match.homeTeamId,
-          team2: match.awayTeamId,
-          score1: match.homeGoals,
-          score2: match.awayGoals,
-        };
-      }
-      return null;
-    };
-    // Choose sortGroupTeamsWithH2H or sortGroupTeamsStandard
-    return sortGroupTeamsWithH2H(teams, getMatchResult);
+    return sortGroup(teams, matches, this.groupRules);
   }
+
+  // Optional, for Prediction.certainty: when each milestone is achieved
+  // (the top two of each group and the best four third-placed teams).
+  certainty: CertaintyRules = {
+    roundOf16: { any: [{ position: [1, 2] }, { acrossGroups: { position: 3, groups: this.groups, best: 4 } }] },
+  };
 
   buildKnockoutBracket(groupStandings: GroupStandings): Matchup[] {
     // 1. Extract qualified teams from groupStandings (e.g. groupStandings['A'][0] for A1)

@@ -1,6 +1,7 @@
 import { TournamentConfig, GroupStandings, Matchup, TeamStats, Match } from '../types';
-import { sortDoubleRoundRobinGroup } from './base';
+import { sortGroup } from './base';
 import { UEFA_NATIONS_LEAGUE_TIEBREAKERS } from './nationsLeagueTiebreakers';
+import { CertaintyRules } from '../certainty';
 
 // 2026-27 UEFA Nations League A. League phase: 4 groups of 4
 // (A1-A4, 24 Sep - 17 Nov 2026); group winners + runners-up advance to
@@ -28,8 +29,15 @@ export class NationsLeagueAConfig implements TournamentConfig {
     return candidateTeamIds[Math.floor(Math.random() * candidateTeamIds.length)];
   }
 
+  groupRules = UEFA_NATIONS_LEAGUE_TIEBREAKERS;
+  twoLeggedStages = ['quarterfinals'];
+  certainty: CertaintyRules = {
+    winGroup: { position: [1, 1] },
+    quarterfinals: { position: [1, 2] },
+  };
+
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    return sortDoubleRoundRobinGroup(teams, matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS);
+    return sortGroup(teams, matches, this.groupRules);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {

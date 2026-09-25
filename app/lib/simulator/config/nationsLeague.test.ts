@@ -207,6 +207,75 @@ describe('SimulatorEngine with NationsLeagueConfig (leagues A-C together)', () =
   });
 });
 
+describe('NationsLeagueConfig certainty', () => {
+  beforeEach(() => {
+    const { teams, teamTournamentGroups, matches } = buildFixtureSet();
+    // Every group finished in position order: team i beat team j (i < j)
+    // home and away by a margin equal to the group's number, so at each
+    // position group 1's team ranks best across groups and group 4's worst.
+    matches.forEach((m: any) => {
+      const margin = Number(m.homeTeamId[1]);
+      const [home, away] = [Number(m.homeTeamId[2]), Number(m.awayTeamId[2])];
+      m.homeGoals = home < away ? margin : 0;
+      m.awayGoals = home < away ? 0 : margin;
+    });
+    state.teams = teams;
+    state.teamTournamentGroups = teamTournamentGroups;
+    state.matches = matches;
+    state.simulationRuns = [];
+    state.predictions = [];
+  });
+
+  const certaintyOf = (teamId: string, milestone: string) =>
+    state.predictions.find((p) => p.teamId === teamId && p.milestone === milestone)?.certainty;
+  const playoffLeg = (date: string, home: string, away: string, homeGoals: number, awayGoals: number) => ({
+    id: state.matches.length + 1, tournament: 'ENB', date: new Date(date), homeTeamId: home, awayTeamId: away,
+    homeGoals, awayGoals, isKnockout: true, location: home, ratingChange: 0,
+  });
+
+  it('settles the direct places and leaves the playoff outcomes open until they are played', async () => {
+    await new SimulatorEngine(new NationsLeagueConfig(), SIMULATIONS).runSimulation();
+
+    // A's 4th-placed teams: A1's and A2's are the best two (playoff), A3's
+    // and A4's go straight down. A3's and A4's 3rd-placed teams are the two
+    // lowest-ranked, so they play the A/B playoff too.
+    expect(certaintyOf('A33', 'autoRelegated')).toBe('CERTAIN');
+    expect(certaintyOf('A13', 'autoRelegated')).toBe('IMPOSSIBLE');
+    expect(certaintyOf('A43', 'relegated')).toBe('CERTAIN');
+    ['A13', 'A23', 'A32', 'A42'].forEach((id) => expect(certaintyOf(id, 'relegated')).toBeNull());
+    expect(certaintyOf('A12', 'relegated')).toBe('IMPOSSIBLE');
+    expect(certaintyOf('A11', 'relegated')).toBe('IMPOSSIBLE');
+
+    expect(certaintyOf('B10', 'promoted')).toBe('CERTAIN');
+    expect(certaintyOf('B11', 'promoted')).toBeNull();
+    expect(certaintyOf('B12', 'promoted')).toBe('IMPOSSIBLE');
+    expect(certaintyOf('B13', 'relegated')).toBeNull();
+    expect(certaintyOf('B11', 'relegated')).toBe('IMPOSSIBLE');
+    expect(certaintyOf('C11', 'promoted')).toBeNull();
+    expect(certaintyOf('C12', 'promoted')).toBe('IMPOSSIBLE');
+
+    // The title ladder starts with the quarter-finals.
+    expect(certaintyOf('A10', 'quarterfinals')).toBe('CERTAIN');
+    expect(certaintyOf('A12', 'champions')).toBe('IMPOSSIBLE');
+    expect(certaintyOf('A10', 'semifinals')).toBeNull();
+
+    state.predictions.forEach((p) => {
+      if (p.certainty === 'CERTAIN') expect(p.probability, `${p.teamId} ${p.milestone}`).toBe(1);
+      if (p.certainty === 'IMPOSSIBLE') expect(p.probability, `${p.teamId} ${p.milestone}`).toBe(0);
+    });
+  });
+
+  it('follows a finished playoff tie', async () => {
+    // B11 (a B runner-up, hosting leg 1) beats A13 2-1 on aggregate.
+    state.matches.push(playoffLeg('2027-03-26', 'B11', 'A13', 2, 0), playoffLeg('2027-03-29', 'A13', 'B11', 1, 0));
+    await new SimulatorEngine(new NationsLeagueConfig(), SIMULATIONS).runSimulation();
+
+    expect(certaintyOf('B11', 'promoted')).toBe('CERTAIN');
+    expect(certaintyOf('A13', 'relegated')).toBe('CERTAIN');
+    expect(state.predictions.find((p) => p.teamId === 'B11' && p.milestone === 'promoted')?.probability).toBe(1);
+  });
+});
+
 describe('NationsLeagueConfig playoff draw', () => {
   const config = new NationsLeagueConfig();
   const ties = (matchups: any[]) => {

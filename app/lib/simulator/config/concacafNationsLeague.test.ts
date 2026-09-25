@@ -220,6 +220,15 @@ describe('simulating League A', () => {
       expect(probability(id, 'relegated')).toBe(0);
       expect(probability(id, 'winGroup')).toBe(0);
     });
+    // Which the certainty calculation proves before a ball is kicked.
+    const certainty = (teamId: string, milestone: string) =>
+      state.predictions.find((p) => p.teamId === teamId && p.milestone === milestone)?.certainty;
+    CNL_A_SEEDS.forEach((id) => {
+      expect(certainty(id, 'quarterfinals')).toBe('CERTAIN');
+      expect(certainty(id, 'relegated')).toBe('IMPOSSIBLE');
+      expect(certainty(id, 'semifinals')).toBeNull();
+    });
+    expect(state.predictions.filter((p) => !CNL_A_SEEDS.includes(p.teamId) && p.certainty)).toEqual([]);
   });
 });
 
