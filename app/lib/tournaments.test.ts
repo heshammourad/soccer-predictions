@@ -30,10 +30,10 @@ describe('FQ dashboard status', () => {
   });
 
   it('does not mark a strong team such as Morocco guaranteed while its group is still open', () => {
-    // Group I (LS, NE, MA, GA): Morocco won 3-0 on matchday 1 and one other
+    // Group A (LS, NE, MA, GA): Morocco won 3-0 on matchday 1 and one other
     // game has been played, so ten of the group's twelve matches remain.
     const groupI = seedFixtures
-      .filter((f) => groups.I.includes(f[3]))
+      .filter((f) => groups.A.includes(f[3]))
       .map((f) => ({ homeTeamId: f[3], awayTeamId: f[4], homeGoals: null, awayGoals: null, isKnockout: false }));
     // Pick the two played games by identity: LS v NE is one of the pairs
     // published twice, so matching on the teams alone would remove both.
