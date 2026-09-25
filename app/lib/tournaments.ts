@@ -12,6 +12,9 @@ export interface MathStatus {
 export interface TournamentDescriptor {
   code: string;
   name: string;
+  // Logo under public/, shown in the sidebar. Qualifiers use the logo of the
+  // tournament they qualify for.
+  logo: string;
   // Every outcome this tournament tracks, in display order. Must match the
   // server-side TournamentConfig.milestones for this code.
   milestones: string[];
@@ -113,6 +116,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'WC',
     name: '2026 World Cup',
+    logo: '/tournaments/wc.png',
     milestones: ['winGroup', 'roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'],
     knockoutStages: ['roundOf32', 'roundOf16', 'quarterfinals', 'semifinals', 'final', 'champions'],
     milestoneLabels: {
@@ -142,6 +146,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'ENA',
     name: '2026-27 UEFA Nations League A',
+    logo: '/tournaments/uefa-nations-league.png',
     milestones: ['winGroup', 'quarterfinals', 'semifinals', 'final', 'champions', 'autoRelegated', 'relegated'],
     knockoutStages: ['quarterfinals', 'semifinals', 'final', 'champions'],
     milestoneLabels: {
@@ -166,6 +171,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'ENB',
     name: '2026-27 UEFA Nations League B',
+    logo: '/tournaments/uefa-nations-league.png',
     milestones: ['autoPromoted', 'promoted', 'relegated'],
     knockoutStages: [],
     milestoneLabels: {
@@ -184,6 +190,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'ENC',
     name: '2026-27 UEFA Nations League C',
+    logo: '/tournaments/uefa-nations-league.png',
     milestones: ['autoPromoted', 'promoted'],
     knockoutStages: [],
     milestoneLabels: {
@@ -200,6 +207,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'FQ',
     name: '2027 Africa Cup of Nations Qualifiers',
+    logo: '/tournaments/afcon.png',
     milestones: ['qualified'],
     knockoutStages: [],
     milestoneLabels: {
@@ -226,6 +234,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'CLA',
     name: '2026-27 CONCACAF Nations League A',
+    logo: '/tournaments/concacaf-nations-league.png',
     milestones: ['winGroup', 'quarterfinals', 'semifinals', 'final', 'champions', 'relegated'],
     knockoutStages: ['quarterfinals', 'semifinals', 'final', 'champions'],
     milestoneLabels: {
@@ -250,6 +259,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'CLB',
     name: '2026-27 CONCACAF Nations League B',
+    logo: '/tournaments/concacaf-nations-league.png',
     milestones: ['promoted', 'relegated'],
     knockoutStages: [],
     milestoneLabels: {
@@ -267,6 +277,7 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
   {
     code: 'CLC',
     name: '2026-27 CONCACAF Nations League C',
+    logo: '/tournaments/concacaf-nations-league.png',
     milestones: ['winGroup', 'promoted'],
     knockoutStages: [],
     milestoneLabels: {
