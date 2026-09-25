@@ -1,12 +1,13 @@
 import { TournamentConfig, GroupStandings, Matchup, Match, TeamStats, TieResult } from '../types';
-import { rankAcrossGroups, sortOverallThenH2H } from './base';
+import { rankAcrossGroups, sortGroup, CONCACAF_NATIONS_LEAGUE_TIEBREAKERS } from './base';
+import { CertaintyRules } from '../certainty';
 
 // 2026-27 CONCACAF Nations League (Concacaf regulations, art. 12). Each league
 // is simulated on its own: the only links between them are the Play-In and Gold
 // Cup preliminary round, which aren't modelled.
 //
 // Groups are ranked by the overall record first and head-to-head only as a
-// tiebreaker (see sortOverallThenH2H). Fair-play points aren't tracked, and
+// tiebreaker (see CONCACAF_NATIONS_LEAGUE_TIEBREAKERS). Fair-play points aren't tracked, and
 // drawing of lots is random.
 
 // The four League A teams seeded straight into the quarter-finals, best first:
@@ -39,8 +40,16 @@ export class ConcacafLeagueAConfig implements TournamentConfig {
     return FINALS_HOST;
   }
 
+  groupRules = CONCACAF_NATIONS_LEAGUE_TIEBREAKERS;
+  twoLeggedStages = ['quarterfinals'];
+  certainty: CertaintyRules = {
+    winGroup: { position: [1, 1] },
+    quarterfinals: { any: [{ team: CNL_A_SEEDS }, { position: [1, 2] }] },
+    relegated: { position: [5, 6] },
+  };
+
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    return sortOverallThenH2H(teams, matches);
+    return sortGroup(teams, matches, this.groupRules);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {
@@ -149,8 +158,14 @@ export class ConcacafLeagueBConfig implements TournamentConfig {
     return null;
   }
 
+  groupRules = CONCACAF_NATIONS_LEAGUE_TIEBREAKERS;
+  certainty: CertaintyRules = {
+    promoted: { position: [1, 1] },
+    relegated: { position: [4, 4] },
+  };
+
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    return sortOverallThenH2H(teams, matches);
+    return sortGroup(teams, matches, this.groupRules);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {
@@ -185,8 +200,14 @@ export class ConcacafLeagueCConfig implements TournamentConfig {
     return null;
   }
 
+  groupRules = CONCACAF_NATIONS_LEAGUE_TIEBREAKERS;
+  certainty: CertaintyRules = {
+    winGroup: { position: [1, 1] },
+    promoted: { any: [{ position: [1, 1] }, { acrossGroups: { position: 2, groups: this.groups, best: 1 } }] },
+  };
+
   sortGroupStandings(teams: TeamStats[], matches: Match[]): TeamStats[] {
-    return sortOverallThenH2H(teams, matches);
+    return sortGroup(teams, matches, this.groupRules);
   }
 
   evaluateGroupPhaseMilestones(rankedStandings: GroupStandings): { [teamId: string]: string[] } {

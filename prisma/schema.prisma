@@ -83,6 +83,7 @@ model Prediction {
   tournament        String
   milestone         String        // e.g. "winGroup", "quarterfinals", "champions"
   probability       Float         // 0.0 to 1.0
+  certainty         Certainty?    // Proven from real results (certainty.ts); null if still open
   eloAtSimulation   Int           @default(0) // ELO rating as of the simulation cutoff date
   updatedAt         DateTime      @default(now())
 
@@ -90,4 +91,10 @@ model Prediction {
   team            Team          @relation(fields: [teamId], references: [id])
 
   @@unique([simulationRunId, teamId, milestone])
+}
+
+// A milestone the real results already settle, whatever happens next.
+enum Certainty {
+  CERTAIN
+  IMPOSSIBLE
 }

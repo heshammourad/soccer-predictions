@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareStats, sortGroupTeamsWithH2H, sortDoubleRoundRobinGroup, sortOverallThenH2H, rankAcrossGroups, CAF_TIEBREAKERS, H2HMatch } from './base';
+import { compareStats, sortGroup, rankAcrossGroups, CAF_TIEBREAKERS, CONCACAF_NATIONS_LEAGUE_TIEBREAKERS } from './base';
 import { TeamStats } from '../types';
 
 function makeTeam(overrides: Partial<TeamStats> & { teamId: string }): TeamStats {
@@ -37,14 +37,18 @@ describe('compareStats', () => {
   });
 });
 
-describe('sortGroupTeamsWithH2H', () => {
+describe('sortGroup (FIFA rules)', () => {
+  const game = (home: string, away: string, homeGoals: number, awayGoals: number) => ({
+    homeTeamId: home, awayTeamId: away, homeGoals, awayGoals,
+  });
+
   it('ranks strictly by points when there is no tie', () => {
     const teams = [
       makeTeam({ teamId: 'A', points: 3 }),
       makeTeam({ teamId: 'B', points: 9 }),
       makeTeam({ teamId: 'C', points: 6 }),
     ];
-    const sorted = sortGroupTeamsWithH2H(teams, () => null);
+    const sorted = sortGroup(teams, []);
     expect(sorted.map((t) => t.teamId)).toEqual(['B', 'C', 'A']);
   });
 
@@ -55,39 +59,29 @@ describe('sortGroupTeamsWithH2H', () => {
       makeTeam({ teamId: 'C', points: 1 }),
     ];
     // A beat B 2-1 head to head
-    const getMatchResult = (teamA: string, teamB: string): H2HMatch | null => {
-      if ((teamA === 'A' && teamB === 'B') || (teamA === 'B' && teamB === 'A')) {
-        return { team1: 'A', team2: 'B', score1: 2, score2: 1 };
-      }
-      return null;
-    };
-    const sorted = sortGroupTeamsWithH2H(teams, getMatchResult);
+    const sorted = sortGroup(teams, [game('A', 'B', 2, 1)]);
     expect(sorted.map((t) => t.teamId)).toEqual(['A', 'B', 'C']);
   });
 
   it('resolves a 3-way circular tie down to overall goal difference', () => {
-    // A beat B, B beat C, C beat A (all 1-0) -> H2H mini-table is level, falls back to
-    // overall stats via sortGroupTeamsStandard, which is randomized only on a full tie;
-    // here overall goal difference differs so it's deterministic.
+    // A beat B, B beat C, C beat A (all 1-0) -> H2H mini-table is level, falls
+    // back to overall stats, which are only drawn by lots on a full tie; here
+    // overall goal difference differs so it's deterministic.
     const teams = [
       makeTeam({ teamId: 'A', points: 3, goalDifference: 2, goalsFor: 3 }),
       makeTeam({ teamId: 'B', points: 3, goalDifference: 0, goalsFor: 2 }),
       makeTeam({ teamId: 'C', points: 3, goalDifference: -2, goalsFor: 1 }),
     ];
-    const results: Record<string, H2HMatch> = {
-      'A-B': { team1: 'A', team2: 'B', score1: 1, score2: 0 },
-      'B-C': { team1: 'B', team2: 'C', score1: 1, score2: 0 },
-      'C-A': { team1: 'C', team2: 'A', score1: 1, score2: 0 },
-    };
-    const getMatchResult = (teamA: string, teamB: string): H2HMatch | null =>
-      results[`${teamA}-${teamB}`] || results[`${teamB}-${teamA}`] || null;
-
-    const sorted = sortGroupTeamsWithH2H(teams, getMatchResult);
+    const sorted = sortGroup(teams, [game('A', 'B', 1, 0), game('B', 'C', 1, 0), game('C', 'A', 1, 0)]);
     expect(sorted.map((t) => t.teamId)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('throws on an empty group', () => {
+    expect(() => sortGroup([], [])).toThrow(/empty group/);
   });
 });
 
-describe('sortDoubleRoundRobinGroup', () => {
+describe('sortGroup (double round-robin)', () => {
   const match = (home: string, away: string, homeGoals: number, awayGoals: number) => ({
     id: 0,
     tournament: 'FQ',
@@ -109,7 +103,7 @@ describe('sortDoubleRoundRobinGroup', () => {
     const a = makeTeam({ teamId: 'A', points: 6 });
     const b = makeTeam({ teamId: 'B', points: 6 });
     const matches = [match('A', 'B', 1, 0), match('B', 'A', 3, 0)];
-    expect(sortDoubleRoundRobinGroup([a, b], matches).map((t) => t.teamId)).toEqual(['B', 'A']);
+    expect(sortGroup([a, b], matches).map((t) => t.teamId)).toEqual(['B', 'A']);
   });
 
   describe('with CAF away-goals criteria', () => {
@@ -122,8 +116,8 @@ describe('sortDoubleRoundRobinGroup', () => {
       const b = makeTeam({ teamId: 'B', points: 6 });
       const matches = [match('A', 'B', 3, 2), match('B', 'A', 1, 0)];
       for (let i = 0; i < 20; i++) {
-        expect(sortDoubleRoundRobinGroup([a, b], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
-        expect(sortDoubleRoundRobinGroup([b, a], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
+        expect(sortGroup([a, b], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
+        expect(sortGroup([b, a], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
       }
     });
 
@@ -135,8 +129,8 @@ describe('sortDoubleRoundRobinGroup', () => {
       const a = makeTeam({ teamId: 'A', points: 6, goalDifference: 5, goalsFor: 8 });
       const b = makeTeam({ teamId: 'B', points: 6, goalDifference: 0, goalsFor: 3 });
       const matches = [match('A', 'B', 2, 1), match('B', 'A', 1, 0)];
-      expect(sortDoubleRoundRobinGroup([a, b], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
-      expect(sortDoubleRoundRobinGroup([a, b], matches).map((t) => t.teamId)).toEqual(['A', 'B']);
+      expect(sortGroup([a, b], matches, caf).map((t) => t.teamId)).toEqual(['B', 'A']);
+      expect(sortGroup([a, b], matches).map((t) => t.teamId)).toEqual(['A', 'B']);
     });
 
     it('falls back to overall away goals when everything before it is level', () => {
@@ -152,7 +146,7 @@ describe('sortDoubleRoundRobinGroup', () => {
         match('D', 'B', 3, 0),
       ];
       for (let i = 0; i < 20; i++) {
-        expect(sortDoubleRoundRobinGroup([b, a], matches, caf).map((t) => t.teamId)).toEqual(['A', 'B']);
+        expect(sortGroup([b, a], matches, caf).map((t) => t.teamId)).toEqual(['A', 'B']);
       }
     });
 
@@ -167,12 +161,12 @@ describe('sortDoubleRoundRobinGroup', () => {
         match('A', 'C', 0, 3), match('C', 'A', 3, 0),   // C beats A twice
         match('B', 'C', 0, 3), match('C', 'B', 3, 0),   // C beats B twice
       ];
-      expect(sortDoubleRoundRobinGroup(teams, matches, caf).map((t) => t.teamId)).toEqual(['C', 'A', 'B']);
+      expect(sortGroup(teams, matches, caf).map((t) => t.teamId)).toEqual(['C', 'A', 'B']);
     });
   });
 });
 
-describe('sortOverallThenH2H (Concacaf Nations League rules)', () => {
+describe('sortGroup (Concacaf Nations League rules)', () => {
   const stats = (teamId: string, points: number, goalDifference: number, goalsFor: number) =>
     makeTeam({ teamId, points, goalDifference, goalsFor, goalsAgainst: goalsFor - goalDifference });
   const game = (home: string, away: string, homeGoals: number, awayGoals: number) => ({
@@ -180,7 +174,7 @@ describe('sortOverallThenH2H (Concacaf Nations League rules)', () => {
     homeGoals, awayGoals, isKnockout: false, location: home, ratingChange: 0,
   });
   const order = (teams: TeamStats[], matches: ReturnType<typeof game>[]) =>
-    sortOverallThenH2H(teams, matches).map((t) => t.teamId);
+    sortGroup(teams, matches, CONCACAF_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId);
 
   it('ranks overall points, goal difference, then goals scored before head-to-head', () => {
     // A beat B home and away, but B is ahead overall on goal difference.

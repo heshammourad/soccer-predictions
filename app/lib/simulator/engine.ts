@@ -1,8 +1,28 @@
 import type { Match as PrismaMatch } from '@/app/generated/prisma/client';
 import { prisma } from '../db';
-import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome, TieResult } from './types';
+import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome, TieResult, League } from './types';
 import { decideByGoals, twoLeggedStats } from './ties';
 import { simulateResult, getLowerScore, calculateRatingChange } from './math';
+import { computeCertainty, CertaintyTable } from './certainty';
+
+// Everything a run needs from the database, as of the engine's cutoff.
+interface TournamentData {
+  matches: PrismaMatch[];
+  // Played matches (as of the cutoff), group and knockout.
+  results: Match[];
+  // Group matches still to play.
+  groupMatches: Match[];
+  // Knockout matches dated up to the cutoff, played or not.
+  knockoutMatches: Match[];
+  // Every knockout match, with results after the cutoff hidden. A later
+  // round's fixture still shows who won an earlier shoot-out.
+  allKnockoutMatches: Match[];
+  initialEloMap: { [teamId: string]: number };
+  teamGroupMap: { [teamId: string]: string };
+  tournamentTeamIds: string[];
+  // Each group's teams with their record from the played matches.
+  initialStandings: GroupStandings;
+}
 
 export class SimulatorEngine {
   private config: TournamentConfig;
@@ -22,139 +42,16 @@ export class SimulatorEngine {
     this.description = description;
   }
 
+  // Loads the tournament and proves what it can about each league's
+  // milestones, without simulating (for backfilling existing runs).
+  async computeCertainty(): Promise<{ [leagueCode: string]: CertaintyTable }> {
+    const data = await this.load();
+    return Object.fromEntries(this.leagues().map((league) => [league.code, this.certaintyFor(league, data)]));
+  }
+
   async runSimulation() {
-    // 1. Fetch all teams
-    const teams = await prisma.team.findMany();
-
-    // 2. Fetch matches for this tournament (or every source tournament of a
-    // multi-league config, which simulates its leagues in one pass)
-    const sources = this.config.sourceTournaments ?? [this.config.code];
-    const tournamentFilter = sources.length === 1 ? sources[0] : { in: sources };
-    const matches = await prisma.match.findMany({
-      where: { tournament: tournamentFilter },
-      orderBy: { date: 'asc' },
-    });
-
-    // 3. Fetch this tournament's team-group assignments (per-tournament, so
-    // different tournaments never overwrite each other's group data)
-    const teamTournamentGroups = await prisma.teamTournamentGroup.findMany({
-      where: { tournament: tournamentFilter },
-    });
-
-    const results = matches.filter((m) => {
-      const isCompleted = m.homeGoals !== null;
-      if (!isCompleted) return false;
-      if (this.asOfDate) {
-        return m.date <= this.asOfDate;
-      }
-      return true;
-    }).map(m => this.mapMatchPrismaToLocal(m));
-
-    const fixtures = matches.filter((m) => {
-      const isCompleted = m.homeGoals !== null;
-      if (!isCompleted) return true;
-      if (this.asOfDate) {
-        return m.date > this.asOfDate;
-      }
-      return false;
-    }).map(m => {
-      const local = this.mapMatchPrismaToLocal(m);
-      if (this.asOfDate && m.date > this.asOfDate) {
-        local.homeGoals = null;
-        local.awayGoals = null;
-      }
-      return local;
-    });
-
-    const groupMatches = fixtures.filter((m) => !m.isKnockout);
-    const knockoutMatches = matches.filter((m) => {
-      if (!m.isKnockout) return false;
-      if (this.asOfDate) {
-        return m.date <= this.asOfDate;
-      }
-      return true;
-    }).map(m => this.mapMatchPrismaToLocal(m));
-
-    // Maps ELO and basic fields
-    const initialEloMap: { [teamId: string]: number } = {};
-    const teamGroupMap: { [teamId: string]: string } = {};
-
-    teams.forEach((t) => {
-      initialEloMap[t.id] = t.currentElo;
-    });
-
-    teamTournamentGroups.forEach((tg) => {
-      teamGroupMap[tg.teamId] = tg.group;
-    });
-
-    // Reconstruct ELO ratings as of this milestone's date by reversing post-cutoff rating changes
-    const cutOff = this.asOfDate;
-    if (cutOff) {
-      const postCutoffMatches = matches.filter(m => m.date > cutOff);
-      postCutoffMatches.forEach((m) => {
-        if (m.ratingChange) {
-          if (initialEloMap[m.homeTeamId] !== undefined) {
-            initialEloMap[m.homeTeamId] -= m.ratingChange;
-          }
-          if (initialEloMap[m.awayTeamId] !== undefined) {
-            initialEloMap[m.awayTeamId] += m.ratingChange;
-          }
-        }
-      });
-    }
-
-    const knownTeamIds = new Set(teams.map((t) => t.id));
-    const additionalTeamIds = (this.config.additionalTeamIds ?? []).filter((id) => {
-      if (!knownTeamIds.has(id)) console.warn(`Ignoring additional team ${id}: not in the Team table.`);
-      return knownTeamIds.has(id);
-    });
-    const tournamentTeamIds = Array.from(
-      new Set([...matches.flatMap((m) => [m.homeTeamId, m.awayTeamId]), ...additionalTeamIds])
-    );
-    const initialStandings: GroupStandings = {};
-
-    this.config.groups.forEach((g) => {
-      initialStandings[g] = [];
-    });
-
-    tournamentTeamIds.forEach((teamId) => {
-      const g = teamGroupMap[teamId];
-      if (g && this.config.groups.includes(g)) {
-        initialStandings[g].push({
-          teamId,
-          group: g,
-          points: 0,
-          goalsFor: 0,
-          goalsAgainst: 0,
-          goalDifference: 0,
-          played: 0,
-          won: 0,
-          drawn: 0,
-          lost: 0
-        });
-      }
-    });
-
-    this.config.groups.forEach((g) => {
-      if (initialStandings[g].length === 0) {
-        throw new Error(
-          `Simulation aborted: group "${g}" for tournament "${this.config.code}" has no teams. ` +
-          `Check TeamTournamentGroup assignments and Match fixtures for this tournament.`
-        );
-      }
-    });
-
-    // Populate actual played matches in initial standings
-    results.forEach((match) => {
-      if (match.isKnockout) return;
-
-      const homeStats = this.findTeamInStandings(initialStandings, match.homeTeamId);
-      const awayStats = this.findTeamInStandings(initialStandings, match.awayTeamId);
-
-      if (homeStats && awayStats && match.homeGoals !== null && match.awayGoals !== null) {
-        this.updateStandingsStats(homeStats, awayStats, match.homeGoals, match.awayGoals);
-      }
-    });
+    const data = await this.load();
+    const { matches, results, groupMatches, knockoutMatches, initialEloMap, teamGroupMap, tournamentTeamIds, initialStandings } = data;
 
     // Accumulate results. The set of tracked milestones (and their meaning)
     // is entirely declared by config.milestones, so different tournaments
@@ -394,9 +291,7 @@ export class SimulatorEngine {
     // 4. Save results. A single-tournament config writes one run under its
     // own code; a multi-league config writes one run per league, each team's
     // predictions limited to its own league's milestones.
-    const leagues = this.config.leagues ?? [
-      { code: this.config.code, groups: this.config.groups, milestones: this.config.milestones },
-    ];
+    const leagues = this.leagues();
     const leagueOfTeam = (teamId: string) => {
       const group = teamGroupMap[teamId];
       return leagues.find((l) => l.groups.includes(group));
@@ -425,17 +320,27 @@ export class SimulatorEngine {
         },
       });
 
+      const certainty = this.certaintyFor(league, data);
       for (const [teamId, totals] of Object.entries(accumulator)) {
         if (this.config.leagues && leagueOfTeam(teamId)?.code !== league.code) continue;
         const eloAtSimulation = Math.round(initialEloMap[teamId] ?? 0);
         for (const milestone of league.milestones) {
+          const probability = totals[milestone] / this.simulationsCount;
+          const proven = certainty[teamId]?.[milestone] ?? null;
+          // Every simulated outcome is a possible one, so a proven milestone
+          // should come out at exactly 1 (or 0). If not, the certainty rules
+          // and the simulation disagree about the format.
+          if ((proven === 'CERTAIN' && probability < 1) || (proven === 'IMPOSSIBLE' && probability > 0)) {
+            console.warn(`${league.code} ${teamId} ${milestone}: proven ${proven} but simulated at ${probability}.`);
+          }
           await prisma.prediction.create({
             data: {
               simulationRunId: run.id,
               teamId,
               tournament: league.code,
               milestone,
-              probability: totals[milestone] / this.simulationsCount,
+              probability,
+              certainty: proven,
               eloAtSimulation,
             },
           });
@@ -444,6 +349,176 @@ export class SimulatorEngine {
     }
 
     console.log(`Successfully completed all simulations for ${this.config.code} (${this.description}).`);
+  }
+
+  private async load(): Promise<TournamentData> {
+    // 1. Fetch all teams
+    const teams = await prisma.team.findMany();
+
+    // 2. Fetch matches for this tournament (or every source tournament of a
+    // multi-league config, which simulates its leagues in one pass)
+    const sources = this.config.sourceTournaments ?? [this.config.code];
+    const tournamentFilter = sources.length === 1 ? sources[0] : { in: sources };
+    const matches = await prisma.match.findMany({
+      where: { tournament: tournamentFilter },
+      orderBy: { date: 'asc' },
+    });
+
+    // 3. Fetch this tournament's team-group assignments (per-tournament, so
+    // different tournaments never overwrite each other's group data)
+    const teamTournamentGroups = await prisma.teamTournamentGroup.findMany({
+      where: { tournament: tournamentFilter },
+    });
+
+    const results = matches.filter((m) => {
+      const isCompleted = m.homeGoals !== null;
+      if (!isCompleted) return false;
+      if (this.asOfDate) {
+        return m.date <= this.asOfDate;
+      }
+      return true;
+    }).map(m => this.mapMatchPrismaToLocal(m));
+
+    const fixtures = matches.filter((m) => {
+      const isCompleted = m.homeGoals !== null;
+      if (!isCompleted) return true;
+      if (this.asOfDate) {
+        return m.date > this.asOfDate;
+      }
+      return false;
+    }).map(m => {
+      const local = this.mapMatchPrismaToLocal(m);
+      if (this.asOfDate && m.date > this.asOfDate) {
+        local.homeGoals = null;
+        local.awayGoals = null;
+      }
+      return local;
+    });
+
+    const groupMatches = fixtures.filter((m) => !m.isKnockout);
+    const knockoutMatches = matches.filter((m) => {
+      if (!m.isKnockout) return false;
+      if (this.asOfDate) {
+        return m.date <= this.asOfDate;
+      }
+      return true;
+    }).map(m => this.mapMatchPrismaToLocal(m));
+    const allKnockoutMatches = fixtures.concat(results).filter((m) => m.isKnockout);
+
+    // Maps ELO and basic fields
+    const initialEloMap: { [teamId: string]: number } = {};
+    const teamGroupMap: { [teamId: string]: string } = {};
+
+    teams.forEach((t) => {
+      initialEloMap[t.id] = t.currentElo;
+    });
+
+    teamTournamentGroups.forEach((tg) => {
+      teamGroupMap[tg.teamId] = tg.group;
+    });
+
+    // Reconstruct ELO ratings as of this milestone's date by reversing post-cutoff rating changes
+    const cutOff = this.asOfDate;
+    if (cutOff) {
+      const postCutoffMatches = matches.filter(m => m.date > cutOff);
+      postCutoffMatches.forEach((m) => {
+        if (m.ratingChange) {
+          if (initialEloMap[m.homeTeamId] !== undefined) {
+            initialEloMap[m.homeTeamId] -= m.ratingChange;
+          }
+          if (initialEloMap[m.awayTeamId] !== undefined) {
+            initialEloMap[m.awayTeamId] += m.ratingChange;
+          }
+        }
+      });
+    }
+
+    const knownTeamIds = new Set(teams.map((t) => t.id));
+    const additionalTeamIds = (this.config.additionalTeamIds ?? []).filter((id) => {
+      if (!knownTeamIds.has(id)) console.warn(`Ignoring additional team ${id}: not in the Team table.`);
+      return knownTeamIds.has(id);
+    });
+    const tournamentTeamIds = Array.from(
+      new Set([...matches.flatMap((m) => [m.homeTeamId, m.awayTeamId]), ...additionalTeamIds])
+    );
+    const initialStandings: GroupStandings = {};
+
+    this.config.groups.forEach((g) => {
+      initialStandings[g] = [];
+    });
+
+    tournamentTeamIds.forEach((teamId) => {
+      const g = teamGroupMap[teamId];
+      if (g && this.config.groups.includes(g)) {
+        initialStandings[g].push({
+          teamId,
+          group: g,
+          points: 0,
+          goalsFor: 0,
+          goalsAgainst: 0,
+          goalDifference: 0,
+          played: 0,
+          won: 0,
+          drawn: 0,
+          lost: 0
+        });
+      }
+    });
+
+    this.config.groups.forEach((g) => {
+      if (initialStandings[g].length === 0) {
+        throw new Error(
+          `Simulation aborted: group "${g}" for tournament "${this.config.code}" has no teams. ` +
+          `Check TeamTournamentGroup assignments and Match fixtures for this tournament.`
+        );
+      }
+    });
+
+    // Populate actual played matches in initial standings
+    results.forEach((match) => {
+      if (match.isKnockout) return;
+
+      const homeStats = this.findTeamInStandings(initialStandings, match.homeTeamId);
+      const awayStats = this.findTeamInStandings(initialStandings, match.awayTeamId);
+
+      if (homeStats && awayStats && match.homeGoals !== null && match.awayGoals !== null) {
+        this.updateStandingsStats(homeStats, awayStats, match.homeGoals, match.awayGoals);
+      }
+    });
+
+    return { matches, results, groupMatches, knockoutMatches, allKnockoutMatches, initialEloMap, teamGroupMap, tournamentTeamIds, initialStandings };
+  }
+
+  private leagues(): League[] {
+    return this.config.leagues ?? [
+      { code: this.config.code, groups: this.config.groups, milestones: this.config.milestones, certainty: this.config.certainty },
+    ];
+  }
+
+  // Which of a league's milestones its teams have certainly achieved or
+  // certainly can't (certainty.ts). Empty without the config's rules.
+  private certaintyFor(league: League, data: TournamentData): CertaintyTable {
+    const { groupRules } = this.config;
+    if (!groupRules || !league.certainty) return {};
+    const { results, groupMatches, allKnockoutMatches, teamGroupMap, tournamentTeamIds, initialStandings } = data;
+    const leagueCodeOf = (teamId: string) =>
+      this.leagues().find((l) => l.groups.includes(teamGroupMap[teamId]))?.code ?? this.config.code;
+    const groups = Object.fromEntries(
+      league.groups.map((g) => [g, (initialStandings[g] ?? []).map((t) => t.teamId)])
+    );
+    return computeCertainty({
+      rules: league.certainty,
+      milestones: league.milestones,
+      groupRules,
+      groups,
+      teamIds: tournamentTeamIds.filter((id) => !this.config.leagues || leagueCodeOf(id) === league.code),
+      groupMatches: [...results.filter((m) => !m.isKnockout), ...groupMatches],
+      knockoutMatches: allKnockoutMatches,
+      knockoutStages: this.config.knockoutStages,
+      twoLeggedStages: this.config.twoLeggedStages,
+      awayGoalsRule: this.config.twoLeggedAwayGoals,
+      sameLeague: (a, b) => leagueCodeOf(a) === leagueCodeOf(b),
+    });
   }
 
   // Groups a stage's Matchups into "ties" to resolve: single matches stay
@@ -674,7 +749,8 @@ export class SimulatorEngine {
       awayGoals: m.awayGoals,
       isKnockout: m.isKnockout,
       location: m.location,
-      ratingChange: m.ratingChange
+      ratingChange: m.ratingChange,
+      winnerOverride: m.winnerOverride,
     };
   }
 }

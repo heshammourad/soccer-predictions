@@ -67,6 +67,7 @@ vi.mock('../math', async (importOriginal) => {
 const { SimulatorEngine } = await import('../engine');
 const math = await import('../math');
 const { AfricaCupQualifiersConfig, AFCON_HOSTS } = await import('./africaCupQualifiers');
+const { computeCertainty } = await import('../certainty');
 
 const SEED_DIR = path.resolve(__dirname, '../../../../prisma/seed-data/FQ');
 const seedGroups: { [group: string]: string[] } = JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'groups'), 'utf8'));
@@ -180,6 +181,46 @@ describe('SimulatorEngine with AfricaCupQualifiersConfig', () => {
       const total = state.predictions.filter((p) => ids.includes(p.teamId)).reduce((s, p) => s + p.probability, 0);
       expect(total).toBeCloseTo(2, 5);
     });
+  });
+});
+
+describe('AFCON qualifiers certainty', () => {
+  const config = new AfricaCupQualifiersConfig();
+  const groupMatches = seedFixtures.map((f) => ({ homeTeamId: f[3], awayTeamId: f[4], homeGoals: null as number | null, awayGoals: null as number | null }));
+  const certainty = (matches: typeof groupMatches) =>
+    computeCertainty({
+      rules: config.certainty,
+      milestones: config.milestones,
+      groupRules: config.groupRules,
+      groups: seedGroups,
+      teamIds: Object.values(seedGroups).flat(),
+      groupMatches: matches,
+      knockoutMatches: [],
+      knockoutStages: [],
+    });
+
+  // The hosts are shown as a flat 100% (a raw simulated 1.0 is displayed as
+  // ">99%"), so they must be proven certain even before any match has been
+  // played, e.g. in the pre-tournament snapshot.
+  it('proves the hosts qualified before a ball is kicked, and nothing else', () => {
+    const table = certainty(groupMatches);
+    const decided = Object.entries(table).filter(([, m]) => m.qualified !== null);
+    expect(decided.map(([id, m]) => [id, m.qualified]).sort()).toEqual(AFCON_HOSTS.map((h) => [h, 'CERTAIN']).sort());
+  });
+
+  it('does not prove a strong team such as Morocco qualified while its group is still open', () => {
+    // Group A (LS, NE, MA, GA): Morocco won 3-0 on matchday 1 and one other
+    // game has been played, so ten of the group's twelve matches remain.
+    // Pick the two played games by identity: LS v NE is one of the pairs
+    // published twice, so matching on the teams alone would change both.
+    const playedMA = groupMatches.find((m) => m.homeTeamId === 'MA' && m.awayTeamId === 'GA')!;
+    const playedLS = groupMatches.find((m) => m.homeTeamId === 'LS' && m.awayTeamId === 'NE')!;
+    const matches = groupMatches.map((m) =>
+      m === playedMA ? { ...m, homeGoals: 3, awayGoals: 0 } : m === playedLS ? { ...m, homeGoals: 0, awayGoals: 1 } : m
+    );
+    const table = certainty(matches);
+    expect(table.MA.qualified).toBeNull();
+    AFCON_HOSTS.forEach((host) => expect(table[host].qualified).toBe('CERTAIN'));
   });
 });
 

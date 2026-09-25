@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { sortDoubleRoundRobinGroup } from './base';
+import { sortGroup } from './base';
 import { NATIONS_LEAGUE_ACCESS_LIST, UEFA_NATIONS_LEAGUE_TIEBREAKERS, accessListPosition } from './nationsLeagueTiebreakers';
 import { TeamStats } from '../types';
 
@@ -43,7 +43,7 @@ describe('UEFA Nations League group tiebreakers', () => {
     for (let i = 0; i < 20; i++) {
       [ids, [...ids].reverse()].forEach((input) => {
         const teams = ['C', 'D', ...input].map(team).filter((t) => input.includes(t.teamId));
-        const sorted = sortDoubleRoundRobinGroup(teams, [...headToHead, ...matches], UEFA_NATIONS_LEAGUE_TIEBREAKERS);
+        const sorted = sortGroup(teams, [...headToHead, ...matches], UEFA_NATIONS_LEAGUE_TIEBREAKERS);
         expect(sorted.map((t) => t.teamId)).toEqual(['A', 'B']);
       });
     }
@@ -74,8 +74,8 @@ describe('UEFA Nations League group tiebreakers', () => {
     for (let i = 0; i < 20; i++) {
       const teams = ['PL', 'ES'].map(team);
       const matches = [match('ES', 'PL', 1, 1), match('PL', 'ES', 1, 1)];
-      expect(sortDoubleRoundRobinGroup(teams, matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId)).toEqual(['ES', 'PL']);
-      expect(sortDoubleRoundRobinGroup([...teams].reverse(), matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId)).toEqual(['ES', 'PL']);
+      expect(sortGroup(teams, matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId)).toEqual(['ES', 'PL']);
+      expect(sortGroup([...teams].reverse(), matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId)).toEqual(['ES', 'PL']);
     }
   });
 
@@ -83,6 +83,6 @@ describe('UEFA Nations League group tiebreakers', () => {
     // B has more away goals and wins overall, but A won the head-to-head.
     const teams = ['B', 'A'].map(team);
     const matches = [match('A', 'B', 1, 0), match('B', 'A', 0, 0), match('C', 'B', 0, 5)];
-    expect(sortDoubleRoundRobinGroup(teams, matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId)).toEqual(['A', 'B']);
+    expect(sortGroup(teams, matches, UEFA_NATIONS_LEAGUE_TIEBREAKERS).map((t) => t.teamId)).toEqual(['A', 'B']);
   });
 });

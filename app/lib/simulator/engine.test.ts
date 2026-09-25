@@ -178,3 +178,67 @@ describe('SimulatorEngine with WorldCup48Config (characterization)', () => {
     expect(state.simulationRuns.length).toBe(firstRunCount);
   });
 });
+
+describe('SimulatorEngine certainty', () => {
+  beforeEach(() => {
+    const { teams, teamTournamentGroups, matches } = buildWorldCupFixtureSet();
+    state.teams = teams;
+    state.teamTournamentGroups = teamTournamentGroups;
+    state.matches = matches;
+    state.simulationRuns = [];
+    state.predictions = [];
+  });
+
+  const certaintyOf = (teamId: string, milestone: string) =>
+    state.predictions.find((p) => p.teamId === teamId && p.milestone === milestone)?.certainty;
+
+  // Nothing proven may contradict the simulation: every simulated outcome is
+  // a possible one.
+  const expectConsistent = () => {
+    state.predictions.forEach((p) => {
+      if (p.certainty === 'CERTAIN') expect(p.probability, `${p.teamId} ${p.milestone}`).toBe(1);
+      if (p.certainty === 'IMPOSSIBLE') expect(p.probability, `${p.teamId} ${p.milestone}`).toBe(0);
+    });
+  };
+
+  it('settles every group-phase milestone once the group stage is over', async () => {
+    // In group k, team 0 beats everyone, team 1 beats 2 and 3, and team 2
+    // beats team 3 by k+1, so the third-placed teams' goal differences run
+    // from -1 (A) to 10 (L): E-L's go through.
+    state.matches.forEach((m) => {
+      const k = GROUPS.indexOf(m.homeTeamId[0]);
+      const [home, away] = [Number(m.homeTeamId[1]), Number(m.awayTeamId[1])];
+      m.homeGoals = home === 2 && away === 3 ? k + 1 : 1;
+      m.awayGoals = 0;
+    });
+    await new SimulatorEngine(new WorldCup48Config(), SIMULATIONS).runSimulation();
+
+    GROUPS.forEach((g, k) => {
+      expect(certaintyOf(`${g}0`, 'winGroup')).toBe('CERTAIN');
+      expect(certaintyOf(`${g}1`, 'winGroup')).toBe('IMPOSSIBLE');
+      expect(certaintyOf(`${g}1`, 'roundOf32')).toBe('CERTAIN');
+      expect(certaintyOf(`${g}2`, 'roundOf32')).toBe(k >= 4 ? 'CERTAIN' : 'IMPOSSIBLE');
+      expect(certaintyOf(`${g}3`, 'roundOf32')).toBe('IMPOSSIBLE');
+      expect(certaintyOf(`${g}3`, 'champions')).toBe('IMPOSSIBLE');
+      // Knockout matches are still to come.
+      expect(certaintyOf(`${g}0`, 'roundOf16')).toBeNull();
+    });
+    expectConsistent();
+  });
+
+  it('never proves something the simulation contradicts, mid-group', async () => {
+    // Four of each group's six matches played, with scores from a fixed
+    // pseudo-random sequence.
+    let seed = 7;
+    const next = () => (seed = (seed * 48271) % 2147483647) % 4;
+    state.matches.forEach((m, i) => {
+      if (i % 6 < 4) {
+        m.homeGoals = next();
+        m.awayGoals = next();
+      }
+    });
+    await new SimulatorEngine(new WorldCup48Config(), 200).runSimulation();
+    expect(state.predictions.some((p) => p.certainty)).toBe(true);
+    expectConsistent();
+  });
+});
