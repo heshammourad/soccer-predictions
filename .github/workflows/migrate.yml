@@ -1,0 +1,43 @@
+name: Apply Database Migrations
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'prisma/migrations/**'
+  # Allow manual trigger from the GitHub Actions tab
+  workflow_dispatch:
+
+# Never run two deploys against the database at once.
+concurrency:
+  group: database-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        # Version comes from the "packageManager" field in package.json
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Vercel deploys the same push in parallel, so this is only safe for
+      # additive migrations (new tables, nullable columns) that the code
+      # already live can ignore. See CLAUDE.md.
+      - name: Apply pending migrations
+        run: pnpm prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
