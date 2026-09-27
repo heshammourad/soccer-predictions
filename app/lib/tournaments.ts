@@ -13,6 +13,9 @@ export interface TournamentDescriptor {
   knockoutStages: string[];
   // Human-readable header/label per milestone.
   milestoneLabels: { [milestone: string]: string };
+  // Plain-language format rules shown above the projections, so readers can
+  // tell what each column means (e.g. auto promotion vs promotion).
+  rules: string[];
   // Which milestone (if any) means "won the group" — drives the group
   // column. Omit for tournaments with no group phase.
   groupPhaseMilestone?: string;
@@ -72,6 +75,11 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       final: 'Finalist',
       champions: 'Champion',
     },
+    rules: [
+      'The top two teams in each of the 12 groups advance to the Round of 32.',
+      'The eight best third-placed teams across all groups also advance.',
+      'From the Round of 32 on, every round is a single knockout match.',
+    ],
     groupPhaseMilestone: 'winGroup',
     milestoneDates: {
       'Start (Pre-tournament)': '2026-06-10T23:59:59Z',
@@ -101,6 +109,13 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       autoRelegated: 'Auto Relegation',
       relegated: 'Relegation',
     },
+    rules: [
+      'The top two teams in each group reach the quarterfinals, two-legged ties in which each group winner faces a runner-up from another group.',
+      'The four quarterfinal winners play the Finals (semifinals and final) in June 2027.',
+      'The two lowest-ranked 4th-placed teams are relegated to League B automatically (Auto Relegation).',
+      'The two other 4th-placed teams and the two lowest-ranked 3rd-placed teams play two-legged playoffs against League B runners-up; the losers are relegated.',
+      'Relegation covers both routes: automatic, or by losing a playoff.',
+    ],
     groupPhaseMilestone: 'winGroup',
     defaultSortMilestones: ['champions', 'final', 'semifinals', 'quarterfinals', 'winGroup'],
     negativeMilestones: ['autoRelegated', 'relegated'],
@@ -121,6 +136,12 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       promoted: 'Promotion',
       relegated: 'Relegation',
     },
+    rules: [
+      'Group winners are promoted to League A automatically (Auto Promotion).',
+      'Runners-up play two-legged playoffs against the League A playoff teams (two 3rd- and two 4th-placed); the winners are promoted.',
+      '4th-placed teams play two-legged playoffs against League C runners-up; the losers are relegated to League C.',
+      'Promotion covers both routes: automatic, or by winning a playoff.',
+    ],
     groupPhaseMilestone: 'autoPromoted',
     defaultSortMilestones: ['promoted', 'autoPromoted'],
     negativeMilestones: ['relegated'],
@@ -138,6 +159,12 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       autoPromoted: 'Auto Promotion',
       promoted: 'Promotion',
     },
+    rules: [
+      'Group winners are promoted to League B automatically (Auto Promotion).',
+      'Runners-up play two-legged playoffs against the League B 4th-placed teams; the winners are promoted.',
+      'Promotion covers both routes: automatic, or by winning a playoff.',
+      'No team is relegated from League C, since the next edition has only three leagues.',
+    ],
     groupPhaseMilestone: 'autoPromoted',
     defaultSortMilestones: ['promoted', 'autoPromoted'],
     keepGroupPhaseMilestoneAfterGroupStage: true,
@@ -153,6 +180,11 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
     milestoneLabels: {
       qualified: 'Qualify',
     },
+    rules: [
+      'Kenya, Tanzania and Uganda qualify automatically as co-hosts, but still play in the qualifying groups.',
+      'The top two teams in each group qualify.',
+      'In a group with a host, the host takes one of those two places, so only the best-placed other team qualifies.',
+    ],
     groupPhaseMilestone: 'qualified',
     keepGroupPhaseMilestoneAfterGroupStage: true,
     // Group stage 24 Sep 2026 - 30 Mar 2027 (6 matchdays; matchdays 3-6 are
@@ -184,6 +216,12 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       champions: 'Champion',
       relegated: 'Relegation',
     },
+    rules: [
+      'Mexico, the United States, Canada and Panama are seeded straight into the quarterfinals.',
+      'The other 12 teams play four matches each in two groups of six; the top two in each group join the seeds in two-legged quarterfinals.',
+      'The quarterfinal winners qualify for the 2027 Gold Cup and play the Finals (semifinals and final) in Los Angeles in March 2027.',
+      'The 5th- and 6th-placed teams in each group are relegated to League B.',
+    ],
     groupPhaseMilestone: 'winGroup',
     defaultSortMilestones: ['champions', 'final', 'semifinals', 'quarterfinals', 'winGroup'],
     negativeMilestones: ['relegated'],
@@ -204,6 +242,10 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       promoted: 'Promotion',
       relegated: 'Relegation',
     },
+    rules: [
+      'Each group winner is promoted to League A and qualifies for the 2027 Gold Cup.',
+      'Each 4th-placed team is relegated to League C.',
+    ],
     groupPhaseMilestone: 'promoted',
     defaultSortMilestones: ['promoted'],
     negativeMilestones: ['relegated'],
@@ -221,6 +263,10 @@ export const TOURNAMENTS: TournamentDescriptor[] = [
       winGroup: 'Win Group',
       promoted: 'Promotion',
     },
+    rules: [
+      'The three group winners are promoted to League B.',
+      'The best runner-up across the three groups is promoted too.',
+    ],
     groupPhaseMilestone: 'winGroup',
     defaultSortMilestones: ['promoted', 'winGroup'],
     keepGroupPhaseMilestoneAfterGroupStage: true,

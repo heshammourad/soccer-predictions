@@ -295,7 +295,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   return (
     <div className="space-y-8">
       {/* Simulation Summary */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-slate-900/40 border border-slate-800 rounded-2xl backdrop-blur-xl gap-4">
+      <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl backdrop-blur-xl space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-100">Monte Carlo Projections</h2>
           <p className="text-sm text-slate-400">
@@ -305,6 +305,16 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                 ).toLocaleString()}`
               : 'No simulation data found in database yet.'}
           </p>
+        </div>
+        {/* Format rules, so the milestone columns (e.g. auto promotion vs
+            promotion) make sense without knowing the competition. */}
+        <div className="pt-4 border-t border-slate-800">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">How it works</h3>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-300 marker:text-slate-600">
+            {tournament.rules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
         </div>
       </div>
 
