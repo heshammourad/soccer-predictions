@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickMatchForFeedRow } from './feedMatching';
+import { feedRowCandidates, pickMatchForFeedRow } from './feedMatching';
 
 const row = (id: number, date: string) => ({ id, date: new Date(`${date}T12:00:00Z`) });
 const at = (date: string) => new Date(`${date}T12:00:00Z`);
@@ -53,5 +53,44 @@ describe('pickMatchForFeedRow', () => {
       const picks = [at('2026-09-27'), at('2026-10-04')].map((d) => pickMatchForFeedRow(existing, d, claimed)?.id);
       expect(picks).toEqual([1, 2]);
     });
+  });
+});
+
+describe('feedRowCandidates', () => {
+  const match = (id: number, home: string, away: string, location: string | null) => ({
+    id,
+    homeTeamId: home,
+    awayTeamId: away,
+    location,
+  });
+
+  // Lesotho v Niger is listed twice with Lesotho first: in Ghana (Sep 2026) and
+  // in Lesotho (Mar 2027). The Ghana result was published as Niger v Lesotho.
+  const lsNeGhana = match(1, 'LS', 'NE', 'GH');
+  const lsNeHome = match(2, 'LS', 'NE', 'LS');
+
+  it('lets a neutral-venue row claim the reversed neutral-venue fixture', () => {
+    expect(feedRowCandidates([lsNeGhana, lsNeHome], 'NE', 'LS', 'GH')).toEqual([lsNeGhana]);
+  });
+
+  it('keeps same-order rows as candidates', () => {
+    expect(feedRowCandidates([lsNeGhana, lsNeHome], 'LS', 'NE', 'LS')).toEqual([lsNeGhana, lsNeHome]);
+  });
+
+  it('never reverses a feed row played at one team’s ground', () => {
+    expect(feedRowCandidates([lsNeGhana], 'NE', 'LS', 'NE')).toEqual([]);
+    expect(feedRowCandidates([lsNeGhana], 'NE', 'LS', null)).toEqual([]);
+  });
+
+  it('keeps a reversed neutral-venue fixture apart from the home return fixture', () => {
+    // Sierra Leone v Zimbabwe in Morocco (Sep), Zimbabwe v Sierra Leone in Zimbabwe (Mar).
+    // The Morocco result, published as Zimbabwe v Sierra Leone, sees both rows and
+    // the date picks the Morocco one; the March fixture row only sees its own.
+    const slZwMorocco = { ...match(3, 'SL', 'ZW', 'MA'), date: at('2026-09-24') };
+    const zwSlHome = { ...match(4, 'ZW', 'SL', 'ZW'), date: at('2027-03-25') };
+    const existing = [slZwMorocco, zwSlHome];
+    const result = feedRowCandidates(existing, 'ZW', 'SL', 'MA');
+    expect(pickMatchForFeedRow(result, at('2026-09-24'), new Set())).toBe(slZwMorocco);
+    expect(feedRowCandidates(existing, 'ZW', 'SL', 'ZW')).toEqual([zwSlHome]);
   });
 });

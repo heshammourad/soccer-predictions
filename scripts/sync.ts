@@ -17,7 +17,7 @@ import {
   MilestoneSchedule,
 } from '../app/lib/simulator/config/concacafNationsLeague';
 import { TournamentConfig } from '../app/lib/simulator/types';
-import { pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
+import { feedRowCandidates, pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
 import * as fs from 'fs';
 import * as path from 'path';
 import { readDataFile } from '../prisma/readDataFile';
@@ -110,18 +110,43 @@ function loadSeedFixtureDates(codes: string[]) {
 }
 loadSeedFixtureDates(GLOBAL_FEED_CODES);
 
+// eloratings.net can answer HTTP 200 with something other than its TSV: on
+// 2026-09-27 every feed (even a results URL that normally 404s) came back with
+// no data rows. Treating that as "nothing new" lets a historical milestone be
+// simulated without the results it's named after, and a milestone run is never
+// recomputed once it exists, so fail the sync (before any simulation) instead.
+function expectTsv(body: string, url: string, minFields: number): string {
+  if (!body.split('\n').some((line) => line.split('\t').length >= minFields)) {
+    throw new Error(`${url} returned no TSV rows (${body.length} bytes): ${JSON.stringify(body.slice(0, 200))}`);
+  }
+  return body;
+}
+
 async function fetchWithFallback(session: Session, urlPrefix: string): Promise<string> {
   const urls = [`${urlPrefix}_latest.tsv`, `${urlPrefix}_results.tsv`, `${urlPrefix}.tsv`];
   let lastStatus: number | undefined;
   for (const url of urls) {
     const res = await session.get(url);
     if (res.status === 200) {
-      return res.text();
+      return expectTsv(await res.text(), url, 8);
     }
     console.log(`${url} returned HTTP ${res.status}, trying next fallback...`);
     lastStatus = res.status;
   }
   throw new Error(`Failed to fetch results from ${urlPrefix}*: HTTP ${lastStatus}`);
+}
+
+// Every match between two teams in a tournament, in either home/away order.
+function findPairMatches(tournament: string, team1: string, team2: string) {
+  return prisma.match.findMany({
+    where: {
+      tournament,
+      OR: [
+        { homeTeamId: team1, awayTeamId: team2 },
+        { homeTeamId: team2, awayTeamId: team1 }
+      ]
+    }
+  });
 }
 
 // Parses a results TSV (year, month, day, home, away, homeGoals, awayGoals,
@@ -161,7 +186,7 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
       // Check if match already exists
       const existing = matchByPair
         ? pickMatchForFeedRow(
-            await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament } }),
+            feedRowCandidates(await findPairMatches(matchTournament, team1, team2), team1, team2, location),
             date,
             claimedMatchIds
           )
@@ -172,7 +197,17 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
       if (existing) {
         await prisma.match.update({
           where: { id: existing.id },
-          data: { homeGoals: score1, awayGoals: score2, location, ratingChange, ...(matchByPair ? { date } : {}) }
+          // The feed's home/away order (it may be reversed, see feedRowCandidates),
+          // which the goals and ratingChange are given in.
+          data: {
+            homeTeamId: team1,
+            awayTeamId: team2,
+            homeGoals: score1,
+            awayGoals: score2,
+            location,
+            ratingChange,
+            ...(matchByPair ? { date } : {})
+          }
         });
       } else {
         await prisma.match.create({
@@ -230,7 +265,7 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
     const location = fields[6] && fields[6].trim() ? fields[6].trim() : null;
 
     const existing = pickMatchForFeedRow(
-      await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament } }),
+      feedRowCandidates(await findPairMatches(tournament, team1, team2), team1, team2, location),
       date,
       claimedMatchIds
     );
@@ -239,7 +274,7 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
       if (existing.homeGoals === null) {
         await prisma.match.update({
           where: { id: existing.id },
-          data: { date, location, isKnockout: isKnockoutMatch(tournament, date) }
+          data: { homeTeamId: team1, awayTeamId: team2, date, location, isKnockout: isKnockoutMatch(tournament, date) }
         });
       }
     } else {
@@ -327,7 +362,7 @@ async function run() {
   try {
     const ratingsRes = await session.get(ratingsUrl);
     if (ratingsRes.status !== 200) throw new Error(`Failed to fetch ratings: ${ratingsRes.status}`);
-    const ratingsData = await ratingsRes.text();
+    const ratingsData = expectTsv(await ratingsRes.text(), ratingsUrl, 4);
 
     console.log('Updating team ELO ratings in database...');
 
@@ -398,7 +433,7 @@ async function run() {
     console.log('Fetching Nations League and Africa Cup qualifier results and fixtures from eloratings.net...');
     const nlResultsRes = await session.get(GLOBAL_RESULTS_URL);
     if (nlResultsRes.status === 200) {
-      const count = await syncResults(await nlResultsRes.text(), GLOBAL_FEED_CODES, true);
+      const count = await syncResults(expectTsv(await nlResultsRes.text(), GLOBAL_RESULTS_URL, 8), GLOBAL_FEED_CODES, true);
       console.log(`Synced ${count} global-feed match results.`);
     } else {
       console.error(`Skipping global-feed results sync: HTTP ${nlResultsRes.status}`);
@@ -406,7 +441,7 @@ async function run() {
 
     const nlFixturesRes = await session.get(GLOBAL_FIXTURES_URL);
     if (nlFixturesRes.status === 200) {
-      const count = await syncFixtures(await nlFixturesRes.text(), GLOBAL_FEED_CODES);
+      const count = await syncFixtures(expectTsv(await nlFixturesRes.text(), GLOBAL_FIXTURES_URL, 6), GLOBAL_FEED_CODES);
       console.log(`Synced ${count} global-feed fixtures.`);
     } else {
       console.error(`Skipping global-feed fixtures sync: HTTP ${nlFixturesRes.status}`);
