@@ -17,7 +17,7 @@ import {
   MilestoneSchedule,
 } from '../app/lib/simulator/config/concacafNationsLeague';
 import { TournamentConfig } from '../app/lib/simulator/types';
-import { pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
+import { feedRowCandidates, pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
 import * as fs from 'fs';
 import * as path from 'path';
 import { readDataFile } from '../prisma/readDataFile';
@@ -136,6 +136,19 @@ async function fetchWithFallback(session: Session, urlPrefix: string): Promise<s
   throw new Error(`Failed to fetch results from ${urlPrefix}*: HTTP ${lastStatus}`);
 }
 
+// Every match between two teams in a tournament, in either home/away order.
+function findPairMatches(tournament: string, team1: string, team2: string) {
+  return prisma.match.findMany({
+    where: {
+      tournament,
+      OR: [
+        { homeTeamId: team1, awayTeamId: team2 },
+        { homeTeamId: team2, awayTeamId: team1 }
+      ]
+    }
+  });
+}
+
 // Parses a results TSV (year, month, day, home, away, homeGoals, awayGoals,
 // tournament, location, ratingChange, ...) and upserts the rows for `codes`.
 // matchByPair: find the existing row by (tournament, home, away) rather than
@@ -173,7 +186,7 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
       // Check if match already exists
       const existing = matchByPair
         ? pickMatchForFeedRow(
-            await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament: matchTournament } }),
+            feedRowCandidates(await findPairMatches(matchTournament, team1, team2), team1, team2, location),
             date,
             claimedMatchIds
           )
@@ -184,7 +197,17 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
       if (existing) {
         await prisma.match.update({
           where: { id: existing.id },
-          data: { homeGoals: score1, awayGoals: score2, location, ratingChange, ...(matchByPair ? { date } : {}) }
+          // The feed's home/away order (it may be reversed, see feedRowCandidates),
+          // which the goals and ratingChange are given in.
+          data: {
+            homeTeamId: team1,
+            awayTeamId: team2,
+            homeGoals: score1,
+            awayGoals: score2,
+            location,
+            ratingChange,
+            ...(matchByPair ? { date } : {})
+          }
         });
       } else {
         await prisma.match.create({
@@ -242,7 +265,7 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
     const location = fields[6] && fields[6].trim() ? fields[6].trim() : null;
 
     const existing = pickMatchForFeedRow(
-      await prisma.match.findMany({ where: { homeTeamId: team1, awayTeamId: team2, tournament } }),
+      feedRowCandidates(await findPairMatches(tournament, team1, team2), team1, team2, location),
       date,
       claimedMatchIds
     );
@@ -251,7 +274,7 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
       if (existing.homeGoals === null) {
         await prisma.match.update({
           where: { id: existing.id },
-          data: { date, location, isKnockout: isKnockoutMatch(tournament, date) }
+          data: { homeTeamId: team1, awayTeamId: team2, date, location, isKnockout: isKnockoutMatch(tournament, date) }
         });
       }
     } else {

@@ -29,3 +29,26 @@ export function pickMatchForFeedRow<T extends { id: number; date: Date }>(
   if (best) claimed.add(best.id);
   return best;
 }
+
+// eloratings.net can publish a neutral-venue result with the teams the other
+// way round from its fixture (fixture Lesotho v Niger in Ghana, result Niger
+// 2-1 Lesotho in Ghana). At a neutral venue neither side is at home, so the
+// order means nothing: a feed row played at a neutral venue may also claim a
+// neutral-venue row for the reversed pair. Home-and-away rows never swap, as
+// either the feed row or the existing row names one team's own ground.
+const isNeutral = (location: string | null, home: string, away: string) =>
+  location !== null && location !== home && location !== away;
+
+export function feedRowCandidates<T extends { homeTeamId: string; awayTeamId: string; location: string | null }>(
+  matches: T[],
+  home: string,
+  away: string,
+  location: string | null
+): T[] {
+  const neutral = isNeutral(location, home, away);
+  return matches.filter(
+    (m) =>
+      (m.homeTeamId === home && m.awayTeamId === away) ||
+      (neutral && m.homeTeamId === away && m.awayTeamId === home && isNeutral(m.location, away, home))
+  );
+}
