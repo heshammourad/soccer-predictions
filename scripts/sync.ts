@@ -155,7 +155,8 @@ function findPairMatches(tournament: string, team1: string, team2: string) {
 // by exact date -- right for double round-robin league phases and two-legged
 // ties, where an ordered home/away pair is unique within a tournament, and
 // robust to a fixture having been rescheduled since it was synced.
-async function syncResults(resultsData: string, codes: string[], matchByPair: boolean): Promise<number> {
+// syncedAt stamps a result the first time it's recorded (Match.resultSyncedAt).
+async function syncResults(resultsData: string, codes: string[], matchByPair: boolean, syncedAt: Date): Promise<number> {
   let resultsCount = 0;
   const claimedMatchIds = new Set<number>(); // see pickMatchForFeedRow
   for (const line of resultsData.split('\n')) {
@@ -206,6 +207,7 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
             awayGoals: score2,
             location,
             ratingChange,
+            ...(existing.homeGoals === null ? { resultSyncedAt: syncedAt } : {}),
             ...(matchByPair ? { date } : {})
           }
         });
@@ -220,7 +222,8 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
             awayGoals: score2,
             isKnockout: isKnockoutMatch(matchTournament, date),
             location,
-            ratingChange
+            ratingChange,
+            resultSyncedAt: syncedAt
           }
         });
       }
@@ -348,6 +351,7 @@ async function warnOnIncompleteGroups(codes: string[]) {
 }
 
 async function run() {
+  const syncStartedAt = new Date();
   console.log('Initializing TLS Client...');
   await initTLS();
 
@@ -426,14 +430,14 @@ async function run() {
       }
 
       console.log(`Updating ${source.code} match results in database...`);
-      const resultsCount = await syncResults(resultsData, [source.code], false);
+      const resultsCount = await syncResults(resultsData, [source.code], false, syncStartedAt);
       console.log(`Synced ${resultsCount} ${source.code} match results.`);
     }
 
     console.log('Fetching Nations League and Africa Cup qualifier results and fixtures from eloratings.net...');
     const nlResultsRes = await session.get(GLOBAL_RESULTS_URL);
     if (nlResultsRes.status === 200) {
-      const count = await syncResults(expectTsv(await nlResultsRes.text(), GLOBAL_RESULTS_URL, 8), GLOBAL_FEED_CODES, true);
+      const count = await syncResults(expectTsv(await nlResultsRes.text(), GLOBAL_RESULTS_URL, 8), GLOBAL_FEED_CODES, true, syncStartedAt);
       console.log(`Synced ${count} global-feed match results.`);
     } else {
       console.error(`Skipping global-feed results sync: HTTP ${nlResultsRes.status}`);
@@ -449,6 +453,10 @@ async function run() {
 
     await ensureGroupAssignments(GLOBAL_FEED_CODES);
     await warnOnIncompleteGroups(GLOBAL_FEED_CODES);
+
+    // Recorded once every feed has synced: the dashboard marks results stamped
+    // at or after the latest sync's start as new (see DataSync).
+    await prisma.dataSync.create({ data: { startedAt: syncStartedAt } });
 
   } finally {
     console.log('Closing TLS session...');
