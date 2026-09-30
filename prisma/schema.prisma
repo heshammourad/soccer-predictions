@@ -58,9 +58,18 @@ model Match {
   winnerOverride String?  // Manual field for penalty shootout winners
   location       String?  // Match location country code
   ratingChange   Int      @default(0) // ELO rating change for this match
-  
+  resultSyncedAt DateTime? // Start of the sync that first recorded the score; null if unplayed or recorded before this column existed
+
   homeTeam       Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
   awayTeam       Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
+}
+
+// One row per successful data sync (scripts/sync.ts), so the dashboard can
+// mark the results the latest sync brought in (Match.resultSyncedAt at or
+// after the latest startedAt).
+model DataSync {
+  id        Int      @id @default(autoincrement())
+  startedAt DateTime
 }
 
 model SimulationRun {
