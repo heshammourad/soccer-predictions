@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
 import { TOURNAMENTS, finalMilestoneIfOver, getTournament } from '../lib/tournaments';
 import SearchInput from './SearchInput';
+import { isNewResult, teamResults, TeamResult } from '../lib/teamResults';
+import TeamResultsTooltip from './TeamResultsTooltip';
 
 interface Team {
   id: string;
@@ -34,6 +36,10 @@ interface Match {
   homeGoals: number | null;
   awayGoals: number | null;
   isKnockout: boolean;
+  location: string | null;
+  // When the sync first recorded the score (null if unplayed, or recorded
+  // before that was tracked).
+  resultSyncedAt: string | null;
   homeTeam: Team;
   awayTeam: Team;
 }
@@ -52,6 +58,8 @@ interface Props {
   results: Match[];
   fixtures: Match[];
   teamGroups: { [teamId: string]: string };
+  // Start of the latest successful sync (null if none recorded yet).
+  lastSyncStartedAt: string | null;
 }
 
 // One row per team for the active SimulationRun, pivoted from the flat
@@ -69,7 +77,7 @@ interface TeamRow {
 
 type SortColumn = string; // 'team' | 'group' | 'elo' | a milestone name
 
-export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures, teamGroups }: Props) {
+export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures, teamGroups, lastSyncStartedAt }: Props) {
   const router = useRouter();
   const tournament = getTournament(activeTournament) ?? TOURNAMENTS[0];
   const [searchTerm, setSearchTerm] = useState('');
@@ -161,6 +169,17 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     if (cutOffDate) return new Date(m.date) > cutOffDate;
     return m.homeGoals === null;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Newest first, so the latest results are on top of the results list.
+  const resultsNewestFirst = [...activeResults].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Each team's results as of this run's cutoff, for the tooltip on its name,
+  // and whether the latest sync brought one in (the dot next to it).
+  const resultsByTeam: { [teamId: string]: TeamResult[] } = {};
+  teamRows.forEach((r) => {
+    resultsByTeam[r.teamId] = teamResults(r.teamId, activeResults, tournament.milestoneDates, lastSyncStartedAt);
+  });
+  const hasNewResults = teamRows.some((r) => resultsByTeam[r.teamId].some((m) => m.isNew));
 
   // Still in the group/league phase if there are unplayed non-knockout
   // fixtures as of this run's cutoff — true for every tournament shape,
@@ -423,6 +442,18 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
             </div>
           </div>
 
+          {activeResults.length > 0 && (
+            <p className="-mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+              {hasNewResults && (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                  <span className="mr-2">New result since the last update.</span>
+                </>
+              )}
+              <span>Hover or tap a team to see its results.</span>
+            </p>
+          )}
+
           {teamRows.length === 0 ? (
             <div className="text-center p-12 bg-slate-900/20 border border-slate-800 rounded-2xl">
               <p className="text-slate-400 text-base mb-4">No prediction records found in NeonDB.</p>
@@ -455,27 +486,38 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
 
                     return (
                       <tr key={r.teamId} className={`hover:bg-slate-900/30 transition ${isEliminated ? 'opacity-35 grayscale text-slate-500 font-normal' : ''}`}>
-                        <td className="py-3 px-5 font-semibold text-slate-100 flex items-center gap-3">
-                          {/* Flags vary in aspect ratio; a fixed-width box keeps the names aligned. */}
-                          <span className="flex w-[26px] shrink-0 justify-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={getFlagUrl(r.teamId)}
-                              alt={`${r.team.name} flag`}
-                              className="h-4 w-auto max-w-full rounded-sm shadow-sm border border-slate-850"
-                              loading="lazy"
-                            />
-                          </span>
-                          <div className="flex flex-col leading-tight">
-                            <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
-                              {r.team.name}
+                        <td className="py-3 px-5 font-semibold text-slate-100">
+                          <TeamResultsTooltip teamName={r.team.name} results={resultsByTeam[r.teamId]}>
+                            {/* Flags vary in aspect ratio; a fixed-width box keeps the names aligned. */}
+                            <span className="flex w-[26px] shrink-0 justify-center">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={getFlagUrl(r.teamId)}
+                                alt={`${r.team.name} flag`}
+                                className="h-4 w-auto max-w-full rounded-sm shadow-sm border border-slate-850"
+                                loading="lazy"
+                              />
                             </span>
-                            {isGroupStage && groupRecord[r.teamId] && (
-                              <span className="text-[11px] font-normal text-slate-500">
-                                {groupRecord[r.teamId].pts} pts · {groupRecord[r.teamId].pld} pld
+                            <span className="flex flex-col leading-tight">
+                              <span className="flex items-center gap-1.5">
+                                <span className={isEliminated ? 'text-slate-500 line-through decoration-slate-600/45' : ''}>
+                                  {r.team.name}
+                                </span>
+                                {resultsByTeam[r.teamId].some((m) => m.isNew) && (
+                                  <span
+                                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400"
+                                    role="img"
+                                    aria-label="New result since the last update"
+                                  />
+                                )}
                               </span>
-                            )}
-                          </div>
+                              {isGroupStage && groupRecord[r.teamId] && (
+                                <span className="text-[11px] font-normal text-slate-500">
+                                  {groupRecord[r.teamId].pts} pts · {groupRecord[r.teamId].pld} pld
+                                </span>
+                              )}
+                            </span>
+                          </TeamResultsTooltip>
                         </td>
                         {isGroupStage && (
                           <td className="py-3 px-4 text-center font-bold text-slate-400">
@@ -527,7 +569,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                {activeResults.map((m) => (
+                {resultsNewestFirst.map((m) => (
                   <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
                     <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
                       <span className="text-right">{m.homeTeam?.name || m.homeTeamId}</span>
@@ -554,7 +596,10 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                       />
                       <span>{m.awayTeam?.name || m.awayTeamId}</span>
                     </div>
-                    <div className="text-[11px] text-slate-500 pl-4 w-28 text-right font-mono">
+                    <div className="text-[11px] text-slate-500 pl-4 w-28 flex items-center justify-end gap-1.5 font-mono">
+                      {isNewResult(m, lastSyncStartedAt) && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" role="img" aria-label="New result since the last update" />
+                      )}
                       {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </div>
                   </div>

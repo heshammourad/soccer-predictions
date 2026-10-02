@@ -64,7 +64,10 @@ export default async function Page({ params }: PageProps) {
     teamGroups[tg.teamId] = tg.group;
   });
 
-  // 4. Separate results and fixtures
+  // 4. The latest sync, whose newly recorded results the dashboard marks
+  const lastSync = await prisma.dataSync.findFirst({ orderBy: { startedAt: 'desc' } });
+
+  // 5. Separate results and fixtures
   const results = matches.filter((m) => m.homeGoals !== null);
   const fixtures = matches.filter((m) => m.homeGoals === null);
   const tournamentName = tournament.name;
@@ -110,6 +113,7 @@ export default async function Page({ params }: PageProps) {
             results={JSON.parse(JSON.stringify(results))}
             fixtures={JSON.parse(JSON.stringify(fixtures))}
             teamGroups={teamGroups}
+            lastSyncStartedAt={lastSync?.startedAt.toISOString() ?? null}
           />
         </div>
       </div>
