@@ -663,20 +663,18 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                   const awayName = m.awayTeam?.name || m.awayTeamId;
                   return (
                     <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
-                      <div className="flex-1 flex flex-col items-end pr-4">
-                        <div className="flex items-center gap-2 font-semibold text-slate-200">
-                          <abbr title={homeName} className="no-underline">{getFifaCode(m.homeTeamId)}</abbr>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={getFlagUrl(m.homeTeamId)}
-                            alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
-                            className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                            loading="lazy"
-                          />
-                        </div>
-                        <span className={`mr-[30px] text-[11px] font-mono ${ratingChangeStyle(m.ratingChange, bigSwing)}`}>
+                      <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
+                        <span className={`text-[11px] font-mono ${ratingChangeStyle(m.ratingChange, bigSwing)}`}>
                           {formatRatingChange(m.ratingChange)}
                         </span>
+                        <abbr title={homeName} className="no-underline">{getFifaCode(m.homeTeamId)}</abbr>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getFlagUrl(m.homeTeamId)}
+                          alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
+                          className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                          loading="lazy"
+                        />
                       </div>
                       <div
                         className="flex items-center gap-3 bg-slate-900/80 px-4 py-1.5 rounded-lg font-mono font-bold text-slate-100 border border-slate-800"
@@ -686,18 +684,16 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                         <span className="text-slate-600">:</span>
                         <span>{m.awayGoals}</span>
                       </div>
-                      <div className="flex-1 flex flex-col items-start pl-4">
-                        <div className="flex items-center gap-2 font-semibold text-slate-200">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={getFlagUrl(m.awayTeamId)}
-                            alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
-                            className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                            loading="lazy"
-                          />
-                          <abbr title={awayName} className="no-underline">{getFifaCode(m.awayTeamId)}</abbr>
-                        </div>
-                        <span className={`ml-[30px] text-[11px] font-mono ${ratingChangeStyle(-m.ratingChange, bigSwing)}`}>
+                      <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-semibold text-slate-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getFlagUrl(m.awayTeamId)}
+                          alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
+                          className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                          loading="lazy"
+                        />
+                        <abbr title={awayName} className="no-underline">{getFifaCode(m.awayTeamId)}</abbr>
+                        <span className={`text-[11px] font-mono ${ratingChangeStyle(-m.ratingChange, bigSwing)}`}>
                           {formatRatingChange(-m.ratingChange)}
                         </span>
                       </div>
