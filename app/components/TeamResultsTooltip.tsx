@@ -3,9 +3,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
+import { getFifaCode } from '../lib/fifaCodes';
 import type { TeamResult } from '../lib/teamResults';
 
-const WIDTH = 348;
+const WIDTH = 312;
 const ROW_HEIGHT = 24;
 const UPSET_LINE_HEIGHT = 16;
 // Lines a result's upset note up under the opponent's flag: the date, stage
@@ -123,7 +124,9 @@ export default function TeamResultsTooltip({ teamName, results, children }: Prop
                         className="h-3 w-auto max-w-full rounded-sm border border-slate-800"
                       />
                     </span>
-                    <span className="flex-1 truncate text-slate-200">{r.opponentName}</span>
+                    <abbr title={r.opponentName} className="flex-1 font-semibold text-slate-200 no-underline">
+                      {getFifaCode(r.opponentId)}
+                    </abbr>
                     <span className="shrink-0 font-mono font-semibold text-slate-100">
                       {r.goalsFor}-{r.goalsAgainst}
                     </span>

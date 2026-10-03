@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
+import { getFifaCode } from '../lib/fifaCodes';
 import { TOURNAMENTS, finalMilestoneIfOver, getTournament } from '../lib/tournaments';
 import SearchInput from './SearchInput';
 import { isNewResult, teamResults, TeamResult } from '../lib/teamResults';
@@ -664,7 +665,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                     <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
                       <div className="flex-1 flex flex-col items-end pr-4">
                         <div className="flex items-center gap-2 font-semibold text-slate-200">
-                          <span className="text-right">{homeName}</span>
+                          <abbr title={homeName} className="no-underline">{getFifaCode(m.homeTeamId)}</abbr>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={getFlagUrl(m.homeTeamId)}
@@ -694,7 +695,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                             className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
                             loading="lazy"
                           />
-                          <span>{awayName}</span>
+                          <abbr title={awayName} className="no-underline">{getFifaCode(m.awayTeamId)}</abbr>
                         </div>
                         <span className={`ml-[30px] text-[11px] font-mono ${ratingChangeStyle(-m.ratingChange, bigSwing)}`}>
                           {formatRatingChange(-m.ratingChange)}
@@ -743,7 +744,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                     <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl text-sm">
                       <div className="flex justify-between items-center">
                         <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-medium text-slate-300">
-                          <span className="text-right">{homeName}</span>
+                          <abbr title={homeName} className="no-underline">{getFifaCode(m.homeTeamId)}</abbr>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={getFlagUrl(m.homeTeamId)}
@@ -763,7 +764,7 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                             className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
                             loading="lazy"
                           />
-                          <span>{awayName}</span>
+                          <abbr title={awayName} className="no-underline">{getFifaCode(m.awayTeamId)}</abbr>
                         </div>
                         <div className="text-[11px] text-indigo-400 pl-4 w-28 text-right font-mono font-semibold">
                           {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
