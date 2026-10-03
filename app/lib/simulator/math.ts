@@ -262,6 +262,14 @@ export function getLowerScore(goalMargin: number): number {
   return 0;
 }
 
+// How much a win by this margin scales the K-factor, as on eloratings.net.
+export function goalDifferenceMultiplier(goalDifference: number): number {
+  const margin = Math.abs(goalDifference);
+  if (margin === 2) return 1.5;
+  if (margin >= 3) return 1.75 + (margin - 3) / 8;
+  return 1;
+}
+
 export function calculateRatingChange(
   favoriteElo: number,
   underdogElo: number,
@@ -269,16 +277,7 @@ export function calculateRatingChange(
   tournament: string
 ): number {
   const ratingDifference = favoriteElo - underdogElo;
-  const goalDifference = Math.abs(result);
-  
-  let kAdj = 1;
-  if (goalDifference === 2) {
-    kAdj = 1.5;
-  } else if (goalDifference >= 3) {
-    kAdj = 1.75 + (goalDifference - 3) / 8;
-  }
-  
-  const k = getWeight(tournament) * kAdj;
+  const k = getWeight(tournament) * goalDifferenceMultiplier(result);
 
   let w = 0.5;
   if (result < 0) {
