@@ -165,25 +165,15 @@ const weights: { [tournament: string]: number } = {
   EAQ: 40,
   EC: 50,
   ECA: 40,
-  // eloratings.net's own K-factor tiers (per their FAQ): World Cup=60,
-  // continental championship/intercontinental=50, WC/continental
-  // qualifiers=40, "all other tournaments"=30, friendlies=20. The Nations
-  // League isn't a qualifier or a continental championship final
-  // tournament, so it falls in the "all other tournaments" tier (matching
-  // BLC/FT/IOG/KNG/WIT below) rather than EC's 50.
-  //
-  // TODO: re-validate against the 2026-27 League A results once played
-  // (first match 2026-09-23). Regressing calculateRatingChange's predicted
-  // change against actual eloratings.net ratingChange values for the
-  // 2024-25 League A season (40 matches) gave a best-fit K of ~36 vs. the
-  // 30 used here (MAE ~3.7 rating points either way) -- inconclusive with
-  // that little data, but worth rechecking with a full season.
-  ENA: 30,
-  // League B/C and the combined Nations League config (see
+  // eloratings.net weights the Nations League like a qualifier (40), not as
+  // "all other tournaments" (30): with the home advantage included, the
+  // 2026-27 League A-C results' actual ratingChange values fit K=40 (see
+  // math.test.ts). League B/C and the combined Nations League config (see
   // config/nationsLeague.ts) use the same tier as League A.
-  ENB: 30,
-  ENC: 30,
-  EN: 30,
+  ENA: 40,
+  ENB: 40,
+  ENC: 40,
+  EN: 40,
   EQ: 40,
   F: 20,
   FBQ: 40,
@@ -299,4 +289,18 @@ export function calculateRatingChange(
 
   const we = 1 / (Math.pow(10, -ratingDifference / 400) + 1);
   return Math.round(k * (w - we));
+}
+
+// Rating points the home team gains from a result (the away team loses the
+// same), given home-minus-away goals. homeElo/awayElo must include the venue's
+// home advantage: eloratings.net's expected result does.
+export function homeRatingChange(
+  homeElo: number,
+  awayElo: number,
+  goalDifference: number,
+  tournament: string
+): number {
+  return homeElo >= awayElo
+    ? calculateRatingChange(homeElo, awayElo, goalDifference, tournament)
+    : -calculateRatingChange(awayElo, homeElo, -goalDifference, tournament);
 }

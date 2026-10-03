@@ -2,7 +2,7 @@ import type { Match as PrismaMatch } from '@/app/generated/prisma/client';
 import { prisma } from '../db';
 import { TournamentConfig, TeamStats, GroupStandings, Matchup, Match, PlayoffOutcome, TieResult, League } from './types';
 import { decideByGoals, twoLeggedStats } from './ties';
-import { simulateResult, getLowerScore, calculateRatingChange } from './math';
+import { simulateResult, getLowerScore, homeRatingChange } from './math';
 import { computeCertainty, CertaintyTable } from './certainty';
 
 // Everything a run needs from the database, as of the engine's cutoff.
@@ -144,11 +144,9 @@ export class SimulatorEngine {
           this.updateStandingsStats(homeStats, awayStats, homeGoals, awayGoals);
         }
 
-        const favTeam = isHomeFav ? fixture.homeTeamId : fixture.awayTeamId;
-        const undTeam = isHomeFav ? fixture.awayTeamId : fixture.homeTeamId;
-        const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, fixture.tournament);
-        simElo[favTeam] += ratingChange;
-        simElo[undTeam] -= ratingChange;
+        const ratingChange = homeRatingChange(homeElo, awayElo, isHomeFav ? marginResult : -marginResult, fixture.tournament);
+        simElo[fixture.homeTeamId] += ratingChange;
+        simElo[fixture.awayTeamId] -= ratingChange;
       });
 
       // B. Sort standings
@@ -604,11 +602,9 @@ export class SimulatorEngine {
       winner = isHomeFav ? match.awayTeamId : match.homeTeamId;
     }
 
-    const favTeam = isHomeFav ? match.homeTeamId : match.awayTeamId;
-    const undTeam = isHomeFav ? match.awayTeamId : match.homeTeamId;
-    const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, this.config.code);
-    simElo[favTeam] += ratingChange;
-    simElo[undTeam] -= ratingChange;
+    const ratingChange = homeRatingChange(homeElo, awayElo, isHomeFav ? marginResult : -marginResult, this.config.code);
+    simElo[match.homeTeamId] += ratingChange;
+    simElo[match.awayTeamId] -= ratingChange;
 
     return winner;
   }
@@ -694,11 +690,9 @@ export class SimulatorEngine {
       awayGoals = lower;
     }
 
-    const favTeam = isHomeFav ? homeTeamId : awayTeamId;
-    const undTeam = isHomeFav ? awayTeamId : homeTeamId;
-    const ratingChange = calculateRatingChange(simElo[favTeam], simElo[undTeam], marginResult, this.config.code);
-    simElo[favTeam] += ratingChange;
-    simElo[undTeam] -= ratingChange;
+    const ratingChange = homeRatingChange(homeElo, awayElo, isHomeFav ? marginResult : -marginResult, this.config.code);
+    simElo[homeTeamId] += ratingChange;
+    simElo[awayTeamId] -= ratingChange;
 
     return { homeGoals, awayGoals };
   }
