@@ -4,8 +4,9 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getFlagUrl } from '../lib/simulator/config/confederations';
 import type { TeamResult } from '../lib/teamResults';
+import { UPSET_THRESHOLD } from '../lib/matchOdds';
 
-const WIDTH = 300;
+const WIDTH = 348;
 const ROW_HEIGHT = 24;
 const MARGIN = 8;
 
@@ -57,7 +58,7 @@ export default function TeamResultsTooltip({ teamName, results, children }: Prop
 
   let position: React.CSSProperties = {};
   if (anchor) {
-    const height = 58 + results.length * ROW_HEIGHT;
+    const height = 58 + results.length * ROW_HEIGHT + (results.some((r) => r.isUpset) ? 16 : 0);
     const left = Math.max(MARGIN, Math.min(anchor.left, window.innerWidth - WIDTH - MARGIN));
     position =
       anchor.bottom + height + MARGIN <= window.innerHeight
@@ -119,6 +120,12 @@ export default function TeamResultsTooltip({ teamName, results, children }: Prop
                     />
                   </span>
                   <span className="flex-1 truncate text-slate-200">{r.opponentName}</span>
+                  {r.isUpset && r.winChance !== null && (
+                    <span className="flex shrink-0 items-center gap-0.5 font-mono font-semibold text-amber-400">
+                      <UpsetIcon />
+                      {Math.round(r.winChance * 100)}%
+                    </span>
+                  )}
                   <span className="shrink-0 font-mono font-semibold text-slate-100">
                     {r.goalsFor}-{r.goalsAgainst}
                   </span>
@@ -127,6 +134,9 @@ export default function TeamResultsTooltip({ teamName, results, children }: Prop
                   >
                     {r.outcome}
                   </span>
+                  <span className={`w-8 shrink-0 text-right font-mono ${ratingChangeStyle(r.ratingChange, r.isBigSwing)}`}>
+                    {formatRatingChange(r.ratingChange)}
+                  </span>
                   <span
                     className={`h-1.5 w-1.5 shrink-0 rounded-full ${r.isNew ? 'bg-sky-400' : ''}`}
                     aria-label={r.isNew ? 'New result' : undefined}
@@ -134,12 +144,40 @@ export default function TeamResultsTooltip({ teamName, results, children }: Prop
                 </li>
               ))}
             </ul>
-            <div className="mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-500">
-              v home · @ away · n neutral venue
+            <div className="mt-2 pt-2 border-t border-slate-800 text-[10px] leading-relaxed text-slate-500">
+              <div>v home · @ away · n neutral venue · ±Elo change</div>
+              {results.some((r) => r.isUpset) && (
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-400">
+                    <UpsetIcon />
+                  </span>
+                  Upset: won with under {Math.round(UPSET_THRESHOLD * 100)}% chance beforehand
+                </div>
+              )}
             </div>
           </div>,
           document.body
         )}
     </>
+  );
+}
+
+export function formatRatingChange(change: number | null): string {
+  if (change === null) return '';
+  return change > 0 ? `+${change}` : change < 0 ? `−${-change}` : '0';
+}
+
+// Big swings (isBigSwing) are bold, so they stand out in a list.
+export function ratingChangeStyle(change: number | null, big: boolean): string {
+  if (!change) return 'text-slate-500';
+  if (change > 0) return big ? 'font-bold text-emerald-300' : 'text-emerald-400/80';
+  return big ? 'font-bold text-rose-300' : 'text-rose-400/80';
+}
+
+export function UpsetIcon({ className = 'h-3 w-3' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M9.3 1 3 9h4.2L6.4 15 13 6.8H8.7L9.3 1Z" />
+    </svg>
   );
 }

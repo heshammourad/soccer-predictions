@@ -1,5 +1,6 @@
 // A team's played matches in one tournament, from its own point of view, for
 // the dashboard's per-team results tooltip.
+import { isBigSwing, preMatchOdds, upsetWinner } from './matchOdds';
 
 export interface ResultMatch {
   id: number;
@@ -11,6 +12,9 @@ export interface ResultMatch {
   isKnockout: boolean;
   location: string | null;
   resultSyncedAt?: string | Date | null;
+  // Both needed for the rating change and pre-match odds.
+  tournament?: string;
+  ratingChange?: number;
   homeTeam?: { name: string };
   awayTeam?: { name: string };
 }
@@ -27,6 +31,13 @@ export interface TeamResult {
   goalsAgainst: number;
   outcome: 'W' | 'D' | 'L';
   isNew: boolean;
+  // The team's rating gain and its pre-match chance of winning, when known.
+  ratingChange: number | null;
+  winChance: number | null;
+  // The rating change is big for this tournament's K-factor.
+  isBigSwing: boolean;
+  // Won with less than UPSET_THRESHOLD chance beforehand.
+  isUpset: boolean;
 }
 
 // Short labels for the knockout rounds, keyed by the milestone a round ends
@@ -75,6 +86,11 @@ export function teamResults(
       const date = new Date(m.date);
       // The feed records every result's venue; a missing one means the home side's ground.
       const location = m.location ?? m.homeTeamId;
+      const oddsMatch =
+        m.tournament !== undefined && m.ratingChange !== undefined
+          ? { tournament: m.tournament, homeGoals: m.homeGoals, awayGoals: m.awayGoals, ratingChange: m.ratingChange }
+          : null;
+      const odds = oddsMatch && preMatchOdds(oddsMatch);
       return {
         matchId: m.id,
         date,
@@ -86,6 +102,10 @@ export function teamResults(
         goalsAgainst,
         outcome: goalsFor > goalsAgainst ? 'W' : goalsFor < goalsAgainst ? 'L' : 'D',
         isNew: isNewResult(m, lastSyncStartedAt),
+        ratingChange: oddsMatch ? (isHome ? oddsMatch.ratingChange : -oddsMatch.ratingChange) : null,
+        winChance: odds ? (isHome ? odds.homeWin : odds.awayWin) : null,
+        isBigSwing: oddsMatch !== null && isBigSwing(oddsMatch.ratingChange, oddsMatch.tournament),
+        isUpset: oddsMatch !== null && upsetWinner(oddsMatch, odds) === (isHome ? 'home' : 'away'),
       };
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime());

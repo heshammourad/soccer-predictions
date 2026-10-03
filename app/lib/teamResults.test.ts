@@ -88,6 +88,25 @@ describe('teamResults', () => {
     );
     expect(rows.map((r) => r.isNew)).toEqual([false, true, false]);
   });
+
+  it("gives the rating change, win chance and upset from the team's side", () => {
+    const greece = (team: string) =>
+      teamResults(
+        team,
+        [match('2026-09-27', 'DE', 'GR', 0, 1, { tournament: 'ENA', ratingChange: -32 })],
+        WC_DATES,
+        null
+      )[0];
+    expect(greece('GR')).toMatchObject({ ratingChange: 32, isBigSwing: true, isUpset: true });
+    expect(greece('GR').winChance).toBeLessThan(0.2);
+    expect(greece('DE')).toMatchObject({ ratingChange: -32, isBigSwing: true, isUpset: false });
+    expect(greece('DE').winChance).toBeGreaterThan(0.5);
+  });
+
+  it('leaves the rating change and odds out when the match lacks them', () => {
+    const [row] = teamResults('FR', [match('2026-06-14', 'FR', 'NO', 1, 0)], WC_DATES, null);
+    expect(row).toMatchObject({ ratingChange: null, winChance: null, isBigSwing: false, isUpset: false });
+  });
 });
 
 describe('isNewResult', () => {

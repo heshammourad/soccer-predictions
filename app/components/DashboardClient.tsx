@@ -6,7 +6,9 @@ import { getFlagUrl } from '../lib/simulator/config/confederations';
 import { TOURNAMENTS, finalMilestoneIfOver, getTournament } from '../lib/tournaments';
 import SearchInput from './SearchInput';
 import { isNewResult, teamResults, TeamResult } from '../lib/teamResults';
-import TeamResultsTooltip from './TeamResultsTooltip';
+import TeamResultsTooltip, { formatRatingChange, ratingChangeStyle, UpsetIcon } from './TeamResultsTooltip';
+import Sparkline, { SparklinePoint } from './Sparkline';
+import { isBigSwing, preMatchOdds, upsetWinner } from '../lib/matchOdds';
 
 interface Team {
   id: string;
@@ -37,6 +39,8 @@ interface Match {
   awayGoals: number | null;
   isKnockout: boolean;
   location: string | null;
+  // The home team's rating gain, as published by eloratings.net.
+  ratingChange: number;
   // When the sync first recorded the score (null if unplayed, or recorded
   // before that was tracked).
   resultSyncedAt: string | null;
@@ -77,6 +81,27 @@ interface TeamRow {
 
 type SortColumn = string; // 'team' | 'group' | 'elo' | a milestone name
 
+type Certainty = 'CERTAIN' | 'IMPOSSIBLE' | null;
+
+// 100% and "—" are kept for outcomes proven from the real results; a
+// simulated 1 or 0 that isn't proven shows as >99% or <1%, since it only
+// means nothing else came up in the simulation.
+function effectiveProbability(val: number, certainty: Certainty | undefined): number {
+  if (certainty === 'IMPOSSIBLE') return 0.0;
+  if (certainty === 'CERTAIN') return 1.0;
+  return Math.max(0.0001, Math.min(0.9999, val));
+}
+
+function formatEffectiveProbability(eff: number): string {
+  if (eff === 0.0) return '—';
+  if (eff === 1.0) return '100%';
+  if (eff <= 0.005) return '<1%';
+  if (eff >= 0.995) return '>99%';
+  return `${Math.round(eff * 100)}%`;
+}
+
+const percent = (p: number) => `${Math.round(p * 100)}%`;
+
 export default function DashboardClient({ activeTournament, simulationRuns, results, fixtures, teamGroups, lastSyncStartedAt }: Props) {
   const router = useRouter();
   const tournament = getTournament(activeTournament) ?? TOURNAMENTS[0];
@@ -101,6 +126,10 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   });
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const sortMilestones = tournament.defaultSortMilestones ?? [...tournament.milestones].reverse();
+  const championsMilestone = sortMilestones[0];
+  // The milestone the trend column plots; the headline one by default.
+  const [trendMilestone, setTrendMilestone] = useState<string>(championsMilestone);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -189,9 +218,6 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
   const certaintyByTeam: { [teamId: string]: TeamRow['certainty'] } = {};
   teamRows.forEach((r) => (certaintyByTeam[r.teamId] = r.certainty));
 
-  const sortMilestones = tournament.defaultSortMilestones ?? [...tournament.milestones].reverse();
-  const championsMilestone = sortMilestones[0];
-
   // A team whose headline outcome (e.g. the title) is proven out of reach.
   const isEliminatedMap: { [teamId: string]: boolean } = {};
   teamRows.forEach((r) => {
@@ -216,24 +242,11 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     }
   });
 
-  // 100% and "—" are kept for outcomes proven from the real results; a
-  // simulated 1 or 0 that isn't proven shows as >99% or <1%, since it only
-  // means nothing else came up in the simulation.
-  const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) => {
-    const certainty = certaintyByTeam[teamId]?.[col];
-    if (certainty === 'IMPOSSIBLE') return 0.0;
-    if (certainty === 'CERTAIN') return 1.0;
-    return Math.max(0.0001, Math.min(0.9999, val));
-  };
+  const getEffectiveProbability = (val: number, teamId: string, col: SortColumn) =>
+    effectiveProbability(val, certaintyByTeam[teamId]?.[col]);
 
-  const formatProbability = (val: number, teamId: string, col: SortColumn) => {
-    const eff = getEffectiveProbability(val, teamId, col);
-    if (eff === 0.0) return '—';
-    if (eff === 1.0) return '100%';
-    if (eff <= 0.005) return '<1%';
-    if (eff >= 0.995) return '>99%';
-    return `${Math.round(eff * 100)}%`;
-  };
+  const formatProbability = (val: number, teamId: string, col: SortColumn) =>
+    formatEffectiveProbability(getEffectiveProbability(val, teamId, col));
 
   // Sort predictions based on whether it is group stage or knockout stage
   const sortedRows = React.useMemo(() => {
@@ -296,6 +309,32 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     };
   };
 
+  // The runs in milestone order (the live "Current Projections" last), for
+  // each team's trend line in the chosen milestone.
+  const trendRuns = [...visibleRuns].sort(
+    (a, b) =>
+      (tournament.milestoneDates[a.description] ? new Date(tournament.milestoneDates[a.description]!).getTime() : Infinity) -
+        (tournament.milestoneDates[b.description] ? new Date(tournament.milestoneDates[b.description]!).getTime() : Infinity) ||
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const showTrend = trendRuns.length >= 2;
+  const trendActiveIndex = trendRuns.findIndex((run) => run.id === selectedRunId);
+  const trendPoints: { [teamId: string]: SparklinePoint[] } = {};
+  trendRuns.forEach((run, i) => {
+    run.predictions.forEach((p) => {
+      if (p.milestone !== trendMilestone) return;
+      const eff = effectiveProbability(p.probability, p.certainty);
+      (trendPoints[p.teamId] ??= trendRuns.map((r) => ({ label: r.description, text: 'n/a', value: null })))[i] = {
+        label: run.description,
+        text: formatEffectiveProbability(eff),
+        value: eff,
+      };
+    });
+  });
+  // One y-scale for every team, topped at the highest value any team reached,
+  // so small chances still show movement but rows stay comparable.
+  const trendMax = Math.max(0, ...Object.values(trendPoints).flatMap((ps) => ps.map((p) => p.value ?? 0)));
+
   // Columns to render: team/group/elo, then this tournament's milestones
   // (group-phase milestone hidden once we're past the group stage).
   const visibleMilestones = tournament.milestones.filter((m) => {
@@ -304,13 +343,14 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     }
     return true;
   });
-  const columns: SortColumn[] = ['team', ...(isGroupStage ? ['group'] : []), 'elo', ...visibleMilestones];
+  const columns: SortColumn[] = ['team', ...(isGroupStage ? ['group'] : []), 'elo', ...(showTrend ? ['trend'] : []), ...visibleMilestones];
   const columnLabels: Record<string, string> = {
     team: 'Team',
     group: 'Group',
     elo: 'ELO',
     ...tournament.milestoneLabels,
   };
+  const milestoneLabel = (m: string) => tournament.milestoneLabels[m] ?? m;
 
   return (
     <div className="space-y-8">
@@ -412,6 +452,27 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                     </svg>
                   </div>
                 </div>
+                {showTrend && (
+                  <div className="relative">
+                    <select
+                      value={trendMilestone}
+                      onChange={(e) => setTrendMilestone(e.target.value)}
+                      aria-label="Milestone the trend column shows"
+                      className="w-full sm:w-56 px-4 pr-10 py-2.5 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-sm appearance-none cursor-pointer"
+                    >
+                      {tournament.milestones.map((m) => (
+                        <option key={m} value={m} className="bg-slate-950 text-slate-300">
+                          Trend: {milestoneLabel(m)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-slate-400">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             {/* Bottom Row: Group Selector */}
@@ -461,10 +522,20 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
             </div>
           ) : (
             <div className="overflow-x-auto border border-slate-800 rounded-2xl bg-slate-900/10 backdrop-blur-xl">
-              <table className="w-full text-left border-collapse min-w-[900px]">
+              <table className={`w-full text-left border-collapse ${showTrend ? 'min-w-[1020px]' : 'min-w-[900px]'}`}>
                 <thead>
                   <tr className="border-b border-slate-800 bg-slate-900/50 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
                     {columns.map(col => {
+                      if (col === 'trend') {
+                        return (
+                          <th key={col} className="py-4 px-4 text-center whitespace-nowrap">
+                            Trend
+                            <div className="mt-0.5 text-[10px] font-semibold normal-case tracking-normal text-slate-500">
+                              {milestoneLabel(trendMilestone)}
+                            </div>
+                          </th>
+                        );
+                      }
                       const isSorted = sortColumn === col;
                       const arrow = isSorted ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
                       const isTeam = col === 'team';
@@ -527,6 +598,13 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                         <td className="py-3 px-4 text-center font-bold font-mono text-slate-400">
                           {r.eloAtSimulation || r.team.currentElo}
                         </td>
+                        {showTrend && (
+                          <td className="py-2 px-4">
+                            {trendPoints[r.teamId] && (
+                              <Sparkline points={trendPoints[r.teamId]} max={trendMax} activeIndex={trendActiveIndex} />
+                            )}
+                          </td>
+                        )}
                         {visibleMilestones.map((milestone) => {
                           const val = r.values[milestone] ?? 0;
                           // A team with no group (e.g. CONCACAF League A's four
@@ -569,41 +647,68 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                {resultsNewestFirst.map((m) => (
-                  <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
-                    <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
-                      <span className="text-right">{m.homeTeam?.name || m.homeTeamId}</span>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getFlagUrl(m.homeTeamId)}
-                        alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
-                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                        loading="lazy"
-                      />
+                {resultsNewestFirst.map((m) => {
+                  const odds = preMatchOdds(m);
+                  const upset = upsetWinner(m, odds);
+                  const bigSwing = isBigSwing(m.ratingChange, m.tournament);
+                  const homeName = m.homeTeam?.name || m.homeTeamId;
+                  const awayName = m.awayTeam?.name || m.awayTeamId;
+                  return (
+                    <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
+                      <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
+                        <span className={`text-[11px] font-mono ${ratingChangeStyle(m.ratingChange, bigSwing)}`}>
+                          {formatRatingChange(m.ratingChange)}
+                        </span>
+                        <span className="text-right">{homeName}</span>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getFlagUrl(m.homeTeamId)}
+                          alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
+                          className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div
+                        className="flex items-center gap-3 bg-slate-900/80 px-4 py-1.5 rounded-lg font-mono font-bold text-slate-100 border border-slate-800"
+                        title={odds ? `Before the match: ${homeName} ${percent(odds.homeWin)} · draw ${percent(odds.draw)} · ${awayName} ${percent(odds.awayWin)}` : undefined}
+                      >
+                        <span>{m.homeGoals}</span>
+                        <span className="text-slate-600">:</span>
+                        <span>{m.awayGoals}</span>
+                      </div>
+                      <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-semibold text-slate-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={getFlagUrl(m.awayTeamId)}
+                          alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
+                          className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                          loading="lazy"
+                        />
+                        <span>{awayName}</span>
+                        <span className={`text-[11px] font-mono ${ratingChangeStyle(-m.ratingChange, bigSwing)}`}>
+                          {formatRatingChange(-m.ratingChange)}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 pl-4 w-28 flex flex-col items-end gap-1 font-mono">
+                        <span className="flex items-center gap-1.5">
+                          {isNewResult(m, lastSyncStartedAt) && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-sky-400" role="img" aria-label="New result since the last update" />
+                          )}
+                          {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                        {upset && odds && (
+                          <span
+                            className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-sans font-semibold text-amber-400"
+                            title={`${upset === 'home' ? homeName : awayName} had a ${percent(upset === 'home' ? odds.homeWin : odds.awayWin)} chance to win`}
+                          >
+                            <UpsetIcon className="h-2.5 w-2.5" />
+                            Upset · {percent(upset === 'home' ? odds.homeWin : odds.awayWin)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 bg-slate-900/80 px-4 py-1.5 rounded-lg font-mono font-bold text-slate-100 border border-slate-800">
-                      <span>{m.homeGoals}</span>
-                      <span className="text-slate-600">:</span>
-                      <span>{m.awayGoals}</span>
-                    </div>
-                    <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-semibold text-slate-200">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getFlagUrl(m.awayTeamId)}
-                        alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
-                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                        loading="lazy"
-                      />
-                      <span>{m.awayTeam?.name || m.awayTeamId}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 pl-4 w-28 flex items-center justify-end gap-1.5 font-mono">
-                      {isNewResult(m, lastSyncStartedAt) && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" role="img" aria-label="New result since the last update" />
-                      )}
-                      {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
