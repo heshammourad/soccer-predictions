@@ -1,8 +1,8 @@
-// Pre-match odds of a played match, recovered from eloratings.net's own rating
-// change: the change is K * goalDifferenceMultiplier * (result - expected), so
-// the expected result (home advantage included) falls out exactly, up to the
-// change's rounding. That gives the rating gap, which the simulator's model
-// turns into win/draw/loss chances.
+// Win/draw/loss chances of a match from the simulator's model. For a played
+// match they're recovered from eloratings.net's own rating change: the change
+// is K * goalDifferenceMultiplier * (result - expected), so the expected
+// result (home advantage included) falls out exactly, up to the change's
+// rounding, and with it the rating gap. A fixture's come from the ratings.
 import { getProbabilities, getWeight, goalDifferenceMultiplier } from './simulator/math';
 
 // A winner given less than this chance beforehand pulled off an upset.
@@ -29,8 +29,25 @@ export function preMatchOdds(match: OddsMatch): MatchOdds | null {
   const k = getWeight(match.tournament) * goalDifferenceMultiplier(goalDifference);
   // Clamped, since rounding can push a near-certain result's expectation past 0 or 1.
   const expected = Math.min(0.999, Math.max(0.001, result - match.ratingChange / k));
-  const homeRatingGap = 400 * Math.log10(expected / (1 - expected));
+  return oddsFromRatingGap(400 * Math.log10(expected / (1 - expected)));
+}
 
+// An unplayed fixture's odds from both teams' ratings, with +100 for a team
+// at its own ground, as in the simulation. A missing venue is the home side's
+// ground, as in the feed.
+export function fixtureOdds(
+  homeElo: number,
+  awayElo: number,
+  fixture: { homeTeamId: string; awayTeamId: string; location: string | null }
+): MatchOdds {
+  const location = fixture.location ?? fixture.homeTeamId;
+  const homeAdvantage = location === fixture.homeTeamId ? 100 : location === fixture.awayTeamId ? -100 : 0;
+  return oddsFromRatingGap(homeElo - awayElo + homeAdvantage);
+}
+
+// Win/draw/win chances from the simulator's model, for a home-minus-away
+// rating gap that includes any home advantage.
+function oddsFromRatingGap(homeRatingGap: number): MatchOdds {
   const probabilities = getProbabilities(Math.abs(homeRatingGap));
   const favouriteWin = Object.entries(probabilities)
     .filter(([margin]) => Number(margin) > 0)

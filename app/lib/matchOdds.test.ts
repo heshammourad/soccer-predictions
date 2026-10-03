@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBigSwing, preMatchOdds, upsetWinner } from './matchOdds';
+import { fixtureOdds, isBigSwing, preMatchOdds, upsetWinner } from './matchOdds';
 import { getProbabilities, homeRatingChange } from './simulator/math';
 
 const favouriteWinChance = (gap: number) =>
@@ -27,6 +27,23 @@ describe('preMatchOdds', () => {
 
   it('has no odds for an unplayed fixture', () => {
     expect(preMatchOdds({ tournament: 'WC', homeGoals: null, awayGoals: null, ratingChange: 0 })).toBeNull();
+  });
+});
+
+describe('fixtureOdds', () => {
+  it('matches the odds recovered from the result for the same ratings and venue', () => {
+    // Wales v Norway at Wales: 1669 v 1937.
+    const before = fixtureOdds(1669, 1937, { homeTeamId: 'WA', awayTeamId: 'NO', location: 'WA' });
+    const recovered = preMatchOdds({ tournament: 'ENA', homeGoals: 2, awayGoals: 1, ratingChange: 29 })!;
+    expect(before.homeWin).toBeCloseTo(recovered.homeWin, 1);
+    expect(before.awayWin).toBeCloseTo(recovered.awayWin, 1);
+  });
+
+  it('gives home advantage only to a team at its own ground', () => {
+    const odds = (location: string | null) => fixtureOdds(1700, 1700, { homeTeamId: 'IE', awayTeamId: 'IL', location });
+    expect(odds(null).homeWin).toBeGreaterThan(odds('RS').homeWin);
+    expect(odds('IE')).toEqual(odds(null));
+    expect(odds('IL').awayWin).toBeCloseTo(odds('IE').homeWin, 10);
   });
 });
 

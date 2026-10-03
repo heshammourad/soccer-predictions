@@ -8,7 +8,8 @@ import SearchInput from './SearchInput';
 import { isNewResult, teamResults, TeamResult } from '../lib/teamResults';
 import TeamResultsTooltip, { formatRatingChange, ratingChangeStyle, UpsetIcon } from './TeamResultsTooltip';
 import Sparkline, { SparklinePoint } from './Sparkline';
-import { isBigSwing, preMatchOdds, upsetWinner } from '../lib/matchOdds';
+import OddsBar from './OddsBar';
+import { fixtureOdds, isBigSwing, preMatchOdds, upsetWinner } from '../lib/matchOdds';
 
 interface Team {
   id: string;
@@ -198,6 +199,12 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
     if (cutOffDate) return new Date(m.date) > cutOffDate;
     return m.homeGoals === null;
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // A team's rating as of this run's cutoff (what the run simulated from), for
+  // the fixtures' odds; the current rating if the run doesn't have the team.
+  const runElo: { [teamId: string]: number } = {};
+  activeRun?.predictions.forEach((p) => (runElo[p.teamId] = p.eloAtSimulation));
+  const ratingAtCutoff = (team: Team) => runElo[team.id] || team.currentElo;
 
   // Newest first, so the latest results are on top of the results list.
   const resultsNewestFirst = [...activeResults].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -655,18 +662,20 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                   const awayName = m.awayTeam?.name || m.awayTeamId;
                   return (
                     <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
-                      <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-semibold text-slate-200">
-                        <span className={`text-[11px] font-mono ${ratingChangeStyle(m.ratingChange, bigSwing)}`}>
+                      <div className="flex-1 flex flex-col items-end pr-4">
+                        <div className="flex items-center gap-2 font-semibold text-slate-200">
+                          <span className="text-right">{homeName}</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getFlagUrl(m.homeTeamId)}
+                            alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
+                            className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                            loading="lazy"
+                          />
+                        </div>
+                        <span className={`mr-[30px] text-[11px] font-mono ${ratingChangeStyle(m.ratingChange, bigSwing)}`}>
                           {formatRatingChange(m.ratingChange)}
                         </span>
-                        <span className="text-right">{homeName}</span>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={getFlagUrl(m.homeTeamId)}
-                          alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
-                          className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                          loading="lazy"
-                        />
                       </div>
                       <div
                         className="flex items-center gap-3 bg-slate-900/80 px-4 py-1.5 rounded-lg font-mono font-bold text-slate-100 border border-slate-800"
@@ -676,16 +685,18 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
                         <span className="text-slate-600">:</span>
                         <span>{m.awayGoals}</span>
                       </div>
-                      <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-semibold text-slate-200">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={getFlagUrl(m.awayTeamId)}
-                          alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
-                          className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                          loading="lazy"
-                        />
-                        <span>{awayName}</span>
-                        <span className={`text-[11px] font-mono ${ratingChangeStyle(-m.ratingChange, bigSwing)}`}>
+                      <div className="flex-1 flex flex-col items-start pl-4">
+                        <div className="flex items-center gap-2 font-semibold text-slate-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getFlagUrl(m.awayTeamId)}
+                            alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
+                            className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                            loading="lazy"
+                          />
+                          <span>{awayName}</span>
+                        </div>
+                        <span className={`ml-[30px] text-[11px] font-mono ${ratingChangeStyle(-m.ratingChange, bigSwing)}`}>
                           {formatRatingChange(-m.ratingChange)}
                         </span>
                       </div>
@@ -725,36 +736,49 @@ export default function DashboardClient({ activeTournament, simulationRuns, resu
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                {activeFixtures.map((m) => (
-                  <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl flex justify-between items-center text-sm">
-                    <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-medium text-slate-300">
-                      <span className="text-right">{m.homeTeam?.name || m.homeTeamId}</span>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getFlagUrl(m.homeTeamId)}
-                        alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
-                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                        loading="lazy"
-                      />
+                {activeFixtures.map((m) => {
+                  const homeName = m.homeTeam?.name || m.homeTeamId;
+                  const awayName = m.awayTeam?.name || m.awayTeamId;
+                  return (
+                    <div key={m.id} className="p-4 border border-slate-800 bg-slate-900/30 rounded-xl text-sm">
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1 flex items-center justify-end gap-2 pr-4 font-medium text-slate-300">
+                          <span className="text-right">{homeName}</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getFlagUrl(m.homeTeamId)}
+                            alt={`${m.homeTeam?.name || m.homeTeamId} flag`}
+                            className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                            loading="lazy"
+                          />
+                        </div>
+                        <div className="px-3 py-1 bg-slate-800 text-slate-400 font-mono text-xs rounded border border-slate-800 uppercase tracking-wider font-semibold">
+                          VS
+                        </div>
+                        <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-medium text-slate-300">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getFlagUrl(m.awayTeamId)}
+                            alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
+                            className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
+                            loading="lazy"
+                          />
+                          <span>{awayName}</span>
+                        </div>
+                        <div className="text-[11px] text-indigo-400 pl-4 w-28 text-right font-mono font-semibold">
+                          {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <OddsBar
+                          odds={fixtureOdds(ratingAtCutoff(m.homeTeam), ratingAtCutoff(m.awayTeam), m)}
+                          homeName={homeName}
+                          awayName={awayName}
+                        />
+                      </div>
                     </div>
-                    <div className="px-3 py-1 bg-slate-800 text-slate-400 font-mono text-xs rounded border border-slate-800 uppercase tracking-wider font-semibold">
-                      VS
-                    </div>
-                    <div className="flex-1 flex items-center justify-start gap-2 pl-4 font-medium text-slate-300">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getFlagUrl(m.awayTeamId)}
-                        alt={`${m.awayTeam?.name || m.awayTeamId} flag`}
-                        className="h-3.5 w-auto max-w-[22px] rounded-sm shadow-sm border border-slate-800"
-                        loading="lazy"
-                      />
-                      <span>{m.awayTeam?.name || m.awayTeamId}</span>
-                    </div>
-                    <div className="text-[11px] text-indigo-400 pl-4 w-28 text-right font-mono font-semibold">
-                      {new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
