@@ -52,3 +52,60 @@ export function feedRowCandidates<T extends { homeTeamId: string; awayTeamId: st
       (neutral && m.homeTeamId === away && m.awayTeamId === home && isNeutral(m.location, away, home))
   );
 }
+
+// eloratings.net also re-publishes upcoming fixtures with a new venue, and the
+// home/away order can flip with it: Lesotho v Gabon in Lesotho became Gabon v
+// Lesotho in South Africa, Belize v St Vincent in French Guiana became St
+// Vincent v Belize in St Vincent. Neither side of such a change need be at a
+// neutral venue, so feedRowCandidates can't pair them.
+//
+// planPairFixtures matches every fixtures-feed row for one pair of teams in one
+// tournament at once. First each row claims the closest same-order (or
+// neutral-reversed) row, as before; only then does a row left without one take
+// the closest unclaimed unplayed row of the pair in either order, so a moved
+// fixture can't take the row another feed row matches exactly. Unplayed rows of
+// the pair that no feed row claimed and that are still to be played (after
+// `now`) are stale: the feed has replaced them. An unplayed row dated in the
+// past is kept, since it may be a played match whose result hasn't been
+// published yet.
+//
+// A fixture row only claims a played match within PLAYED_MATCH_WINDOW_MS of
+// its date: that's the feed still listing a match it has the result of. A
+// played match further away is an earlier meeting (French Guiana v St Vincent
+// in September), not the fixture it moved from (St Vincent v French Guiana,
+// formerly French Guiana's home match).
+export type FixtureFeedRow = { home: string; away: string; date: Date; location: string | null };
+
+const PLAYED_MATCH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+type PairMatch = {
+  id: number;
+  date: Date;
+  homeTeamId: string;
+  awayTeamId: string;
+  location: string | null;
+  homeGoals: number | null;
+};
+
+export function planPairFixtures<T extends PairMatch>(
+  rows: FixtureFeedRow[],
+  existing: T[],
+  now: Date
+): { matched: (T | null)[]; stale: T[] } {
+  const claimed = new Set<number>();
+  const matched = rows.map((row) =>
+    pickMatchForFeedRow(
+      feedRowCandidates(existing, row.home, row.away, row.location).filter(
+        (m) => m.homeGoals === null || Math.abs(m.date.getTime() - row.date.getTime()) <= PLAYED_MATCH_WINDOW_MS
+      ),
+      row.date,
+      claimed
+    )
+  );
+  const unplayed = existing.filter((m) => m.homeGoals === null);
+  rows.forEach((row, i) => {
+    if (!matched[i]) matched[i] = pickMatchForFeedRow(unplayed, row.date, claimed);
+  });
+  const stale = unplayed.filter((m) => !claimed.has(m.id) && m.date.getTime() > now.getTime());
+  return { matched, stale };
+}
