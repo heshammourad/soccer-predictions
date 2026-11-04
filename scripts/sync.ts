@@ -17,7 +17,7 @@ import {
   MilestoneSchedule,
 } from '../app/lib/simulator/config/concacafNationsLeague';
 import { TournamentConfig } from '../app/lib/simulator/types';
-import { feedRowCandidates, pickMatchForFeedRow } from '../app/lib/simulator/feedMatching';
+import { feedRowCandidates, pickMatchForFeedRow, planPairFixtures, type FixtureFeedRow } from '../app/lib/simulator/feedMatching';
 import * as fs from 'fs';
 import * as path from 'path';
 import { readDataFile } from '../prisma/readDataFile';
@@ -236,11 +236,14 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
 // Parses the global fixtures TSV (year, month, day, home, away, tournament,
 // location, ...) and creates or refreshes the still-unplayed matches for
 // `codes`, so late-published fixtures (e.g. a drawn playoff pairing) and
-// venue/date changes reach the simulator without reseeding.
-async function syncFixtures(fixturesData: string, codes: string[]): Promise<number> {
+// venue/date changes reach the simulator without reseeding. Rows are matched a
+// pair of teams at a time (planPairFixtures), and a pair's upcoming fixtures
+// that the feed has replaced are deleted, so a changed venue or home/away order
+// can't leave the old fixture behind to be simulated alongside the new one.
+async function syncFixtures(fixturesData: string, codes: string[], now: Date): Promise<number> {
   const knownTeams = new Set((await prisma.team.findMany({ select: { id: true } })).map((t) => t.id));
-  let count = 0;
-  const claimedMatchIds = new Set<number>(); // see pickMatchForFeedRow
+  // Feed rows by (tournament, unordered pair), in feed order.
+  const pairs = new Map<string, { tournament: string; rows: FixtureFeedRow[] }>();
   for (const line of fixturesData.split('\n')) {
     if (!line.trim()) continue;
     const fields = line.split('\t');
@@ -267,35 +270,37 @@ async function syncFixtures(fixturesData: string, codes: string[]): Promise<numb
     if (isBeforeEdition(tournament, date)) continue;
     const location = fields[6] && fields[6].trim() ? fields[6].trim() : null;
 
-    const existing = pickMatchForFeedRow(
-      feedRowCandidates(await findPairMatches(tournament, team1, team2), team1, team2, location),
-      date,
-      claimedMatchIds
-    );
-    if (existing) {
-      // A played match is owned by the results sync.
-      if (existing.homeGoals === null) {
-        await prisma.match.update({
-          where: { id: existing.id },
-          data: { homeTeamId: team1, awayTeamId: team2, date, location, isKnockout: isKnockoutMatch(tournament, date) }
-        });
+    const key = [tournament, ...[team1, team2].sort()].join('|');
+    if (!pairs.has(key)) pairs.set(key, { tournament, rows: [] });
+    pairs.get(key)!.rows.push({ home: team1, away: team2, date, location });
+  }
+
+  let count = 0;
+  for (const { tournament, rows } of pairs.values()) {
+    const { matched, stale } = planPairFixtures(rows, await findPairMatches(tournament, rows[0].home, rows[0].away), now);
+    for (const [i, row] of rows.entries()) {
+      const existing = matched[i];
+      const data = {
+        homeTeamId: row.home,
+        awayTeamId: row.away,
+        date: row.date,
+        location: row.location,
+        isKnockout: isKnockoutMatch(tournament, row.date)
+      };
+      if (existing) {
+        // A played match is owned by the results sync.
+        if (existing.homeGoals === null) await prisma.match.update({ where: { id: existing.id }, data });
+      } else {
+        await prisma.match.create({ data: { ...data, tournament, homeGoals: null, awayGoals: null, ratingChange: 0 } });
       }
-    } else {
-      await prisma.match.create({
-        data: {
-          tournament,
-          date,
-          homeTeamId: team1,
-          awayTeamId: team2,
-          homeGoals: null,
-          awayGoals: null,
-          isKnockout: isKnockoutMatch(tournament, date),
-          location,
-          ratingChange: 0
-        }
-      });
+      count++;
     }
-    count++;
+    for (const m of stale) {
+      console.log(
+        `Removing ${tournament} fixture ${m.homeTeamId}-${m.awayTeamId} at ${m.location} on ${m.date.toISOString().slice(0, 10)}: replaced in the fixtures feed.`
+      );
+      await prisma.match.delete({ where: { id: m.id } });
+    }
   }
   return count;
 }
@@ -445,7 +450,7 @@ async function run() {
 
     const nlFixturesRes = await session.get(GLOBAL_FIXTURES_URL);
     if (nlFixturesRes.status === 200) {
-      const count = await syncFixtures(expectTsv(await nlFixturesRes.text(), GLOBAL_FIXTURES_URL, 6), GLOBAL_FEED_CODES);
+      const count = await syncFixtures(expectTsv(await nlFixturesRes.text(), GLOBAL_FIXTURES_URL, 6), GLOBAL_FEED_CODES, syncStartedAt);
       console.log(`Synced ${count} global-feed fixtures.`);
     } else {
       console.error(`Skipping global-feed fixtures sync: HTTP ${nlFixturesRes.status}`);
