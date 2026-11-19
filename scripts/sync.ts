@@ -45,6 +45,12 @@ const RESULTS_SOURCES: { code: string; urlPrefix: string }[] = [
 // playoff pairings, once announced) in the global fixtures feed, both tagged
 // with the tournament code.
 const GLOBAL_FEED_CODES = ['ENA', 'ENB', 'ENC', 'FQ', 'CLA', 'CLB', 'CLC'];
+// Feed codes stored under another tournament's code. eloratings.net tags
+// CONCACAF Nations League A's quarterfinals and Finals `CNL`, not the `CLA` of
+// its group stage (League B and C keep `CLB`/`CLC` throughout), and the
+// simulator and dashboard read a tournament's matches by a single code.
+const FEED_CODE_ALIASES: { [feedCode: string]: string } = { CNL: 'CLA' };
+const feedTournamentCode = (feedCode: string) => FEED_CODE_ALIASES[feedCode] ?? feedCode;
 const GLOBAL_RESULTS_URL = 'https://eloratings.net/latest.tsv';
 const GLOBAL_FIXTURES_URL = 'https://eloratings.net/fixtures.tsv';
 
@@ -163,7 +169,7 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
     if (!line.trim()) continue;
     const fields = line.split('\t');
     if (fields.length >= 8) {
-      const matchTournament = fields[7].trim();
+      const matchTournament = feedTournamentCode(fields[7].trim());
       if (!codes.includes(matchTournament)) continue;
 
       const year = fields[0].trim();
@@ -212,7 +218,7 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
           }
         });
       } else {
-        await prisma.match.create({
+        const created = await prisma.match.create({
           data: {
             tournament: matchTournament,
             date,
@@ -226,6 +232,11 @@ async function syncResults(resultsData: string, codes: string[], matchByPair: bo
             resultSyncedAt: syncedAt
           }
         });
+        // Claimed like a matched row, so a second feed row for the same pair
+        // and order in this pass (both legs of a tie the feed gives one host,
+        // neither synced before) becomes its own match instead of overwriting
+        // this one.
+        claimedMatchIds.add(created.id);
       }
       resultsCount++;
     }
@@ -248,7 +259,7 @@ async function syncFixtures(fixturesData: string, codes: string[], now: Date): P
     if (!line.trim()) continue;
     const fields = line.split('\t');
     if (fields.length < 6) continue;
-    const tournament = fields[5].trim();
+    const tournament = feedTournamentCode(fields[5].trim());
     if (!codes.includes(tournament)) continue;
 
     const team1 = fields[3].trim();
