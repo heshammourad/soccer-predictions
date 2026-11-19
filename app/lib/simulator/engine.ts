@@ -629,8 +629,27 @@ export class SimulatorEngine {
     const teamA = leg1.homeTeamId; // hosts leg 1
     const teamB = leg1.awayTeamId; // hosts leg 2
 
-    const leg1Score = this.resolveLegGoals(leg1.homeTeamId, leg1.awayTeamId, knockoutMatches, simElo);
-    const leg2Score = this.resolveLegGoals(leg2.homeTeamId, leg2.awayTeamId, knockoutMatches, simElo);
+    // The tie's real matches, matched to its legs by date rather than by who
+    // hosts: the feed can name the same host for both legs (United States v
+    // Haiti, 2026 CONCACAF Nations League quarterfinal), so looking a leg up
+    // by home team would miss one that's been played. A real score is turned
+    // round to the leg's home team; when the real host differs, its goals
+    // count as that leg's away goals, which only matters on a level aggregate.
+    const realLegs = knockoutMatches
+      .filter(
+        (m) => (m.homeTeamId === teamA && m.awayTeamId === teamB) || (m.homeTeamId === teamB && m.awayTeamId === teamA)
+      )
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const legGoals = (leg: Matchup, real: Match | undefined) => {
+      if (real && real.homeGoals !== null && real.awayGoals !== null) {
+        return real.homeTeamId === leg.homeTeamId
+          ? { homeGoals: real.homeGoals, awayGoals: real.awayGoals }
+          : { homeGoals: real.awayGoals, awayGoals: real.homeGoals };
+      }
+      return this.simulateLegGoals(leg.homeTeamId, leg.awayTeamId, simElo);
+    };
+    const leg1Score = legGoals(leg1, realLegs[0]);
+    const leg2Score = legGoals(leg2, realLegs[1]);
     const stats = twoLeggedStats(teamA, teamB, leg1Score, leg2Score);
 
     const decided = decideByGoals(leg1Score, leg2Score, this.config.twoLeggedAwayGoals ?? false);
@@ -647,24 +666,15 @@ export class SimulatorEngine {
     return { winnerId, teamAId: teamA, teamBId: teamB, stats };
   }
 
-  // Resolves one leg's scoreline: the real result if it's already been
-  // played, otherwise a simulated scoreline (with the home team always
-  // getting the home-field ELO boost, since a leg is by definition played
-  // at its designated home team's ground, unless the config says that team
-  // cannot host).
-  private resolveLegGoals(
+  // Simulates one unplayed leg's scoreline, with the home team getting the
+  // home-field ELO boost, since a leg is by definition played at its
+  // designated home team's ground, unless the config says that team cannot
+  // host.
+  private simulateLegGoals(
     homeTeamId: string,
     awayTeamId: string,
-    knockoutMatches: Match[],
     simElo: { [teamId: string]: number }
   ): { homeGoals: number; awayGoals: number } {
-    const actual = knockoutMatches.find(
-      (m) => m.homeTeamId === homeTeamId && m.awayTeamId === awayTeamId
-    );
-    if (actual && actual.homeGoals !== null && actual.awayGoals !== null) {
-      return { homeGoals: actual.homeGoals, awayGoals: actual.awayGoals };
-    }
-
     const homeHosts = this.config.hostsHomeMatch?.(homeTeamId, awayTeamId) ?? true;
     const homeElo = simElo[homeTeamId] + (homeHosts ? 100 : 0);
     const awayElo = simElo[awayTeamId];

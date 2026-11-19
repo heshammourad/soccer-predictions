@@ -122,3 +122,31 @@ describe('orderStageWinners', () => {
     await expect(new SimulatorEngine(config, 5).runSimulation()).rejects.toThrow(/must return the stage's winners/);
   });
 });
+
+describe('real two-legged ties', () => {
+  const leg = (date: string, home: string, away: string, homeGoals: number, awayGoals: number) => ({
+    id: state.matches.length + 1, tournament: 'TST', date: new Date(date), homeTeamId: home, awayTeamId: away,
+    homeGoals, awayGoals, isKnockout: true, location: home, ratingChange: 0,
+  });
+
+  it('uses both legs when the feed names the same host for each', async () => {
+    // The bracket has S4 host leg 1, but the feed lists W4 at home both times
+    // (as it did United States v Haiti); W4 won both, so it is through, however
+    // far apart the ratings are.
+    state.matches.push(leg('2026-11-12', 'W4', 'S4', 2, 0));
+    state.matches.push(leg('2026-11-15', 'W4', 'S4', 1, 0));
+    await new SimulatorEngine(makeConfig({ additionalTeamIds: S }), 40).runSimulation();
+    expect(probability('W4', 'semifinals')).toBe(1);
+    expect(probability('S4', 'semifinals')).toBe(0);
+  });
+
+  it('turns a real leg round to the bracket leg it is matched with by date', async () => {
+    // Leg 1 (S4's home leg by the bracket) was hosted by W4: W4 won 1-0 and
+    // lost the return 3-0, so S4 goes through 3-1 on aggregate.
+    state.matches.push(leg('2026-11-12', 'W4', 'S4', 1, 0));
+    state.matches.push(leg('2026-11-15', 'S4', 'W4', 3, 0));
+    await new SimulatorEngine(makeConfig({ additionalTeamIds: S }), 40).runSimulation();
+    expect(probability('S4', 'semifinals')).toBe(1);
+    expect(probability('W4', 'semifinals')).toBe(0);
+  });
+});
